@@ -1,14 +1,14 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Play, CheckCircle, Menu, X, ChevronDown, FileText, LogOut, Settings, Clock, ExternalLink, AlertCircle, RefreshCw
+  Play, CheckCircle, Menu, X, ChevronDown, FileText, LogOut, Clock, ExternalLink
 } from 'lucide-react';
 import { User, Module, Lesson } from '../types.ts';
 import { Link } from 'react-router-dom';
 import { marked } from 'marked';
 import { supabase } from '../lib/supabase.ts';
-import ReactPlayer from 'react-player';
+import VideoPlayer from '../components/VideoPlayer.tsx';
 
 interface DashboardProps {
   user: User;
@@ -22,9 +22,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [expandedModules, setExpandedModules] = useState<string[]>([]);
   const [progress, setProgress] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [videoError, setVideoError] = useState(false);
-  const [videoKey, setVideoKey] = useState(0);
-  const playerRef = useRef<any>(null);
 
   useEffect(() => {
     fetchContent();
@@ -64,17 +61,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   }, [modules, progress]);
 
   const htmlDescription = useMemo(() => activeLesson ? marked.parse(activeLesson.description || '') : '', [activeLesson]);
-
-  const formatYoutubeUrl = (url: string) => {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = url?.match(regExp);
-    if (match && match[2].length === 11) {
-      const videoId = match[2];
-      const origin = encodeURIComponent(window.location.origin);
-      return `https://www.youtube-nocookie.com/embed/${videoId}?enablejsapi=1&origin=${origin}&rel=0&modestbranding=1`;
-    }
-    return url;
-  };
 
   if (loading) return null;
 
@@ -121,27 +107,21 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         <main className="flex-1 overflow-y-auto bg-[#050505] p-6 lg:p-12 custom-scrollbar">
           {activeLesson ? (
             <div className="max-w-5xl mx-auto animate-in fade-in duration-500">
-              <div className="aspect-video bg-black rounded-[2.5rem] overflow-hidden border border-white/5 mb-10 shadow-2xl relative group">
-                {!videoError ? (
-                  <ReactPlayer key={videoKey} url={formatYoutubeUrl(activeLesson.video_url)} width="100%" height="100%" controls playing={false} onError={() => setVideoError(true)} config={{ youtube: { playerVars: { origin: window.location.origin } } }} />
-                ) : (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-10">
-                    <AlertCircle size={48} className="text-red-600 mb-4 opacity-50" />
-                    <h2 className="text-lg font-black uppercase mb-4">Error de Reproducción</h2>
-                    <button onClick={() => setVideoKey(k => k + 1)} className="bg-white text-black px-6 py-3 rounded-xl font-black uppercase text-[10px] hover:bg-red-600 hover:text-white transition-all"><RefreshCw size={14} className="inline mr-2"/> Reintentar</button>
-                  </div>
-                )}
+              {/* COMPONENTE DE VIDEO PREMIUM */}
+              <div className="mb-10">
+                <VideoPlayer url={activeLesson.video_url} thumbnail="https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=1000&auto=format&fit=crop" />
               </div>
+
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
                 <div className="lg:col-span-2">
                   <h1 className="text-4xl font-black italic tracking-tighter uppercase mb-6">{activeLesson.title}</h1>
                   <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: htmlDescription }} />
                 </div>
                 <div className="space-y-6">
-                  <button onClick={() => onToggleProgress(activeLesson.id)} className={`w-full py-5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${progress.includes(activeLesson.id) ? 'bg-green-600/10 text-green-500 border border-green-600/20' : 'bg-white text-black hover:bg-red-600 hover:text-white'}`}>
+                  <button onClick={() => onToggleProgress(activeLesson.id)} className={`w-full py-5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl ${progress.includes(activeLesson.id) ? 'bg-green-600/10 text-green-500 border border-green-600/20' : 'bg-white text-black hover:bg-red-600 hover:text-white'}`}>
                     {progress.includes(activeLesson.id) ? 'Completado ✓' : 'Marcar como Visto'}
                   </button>
-                  <div className="p-8 bg-white/5 border border-white/5 rounded-[2.5rem]">
+                  <div className="p-8 bg-white/5 border border-white/5 rounded-[2.5rem] shadow-2xl">
                     <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-6">Recursos</h3>
                     {activeLesson.resources?.map((r, i) => (
                       <a key={i} href={r.url} className="flex items-center justify-between p-4 bg-black/40 rounded-xl mb-2 hover:bg-red-600 group transition-all">
@@ -149,6 +129,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                         <ExternalLink size={12} className="text-gray-600 group-hover:text-white" />
                       </a>
                     ))}
+                    {(!activeLesson.resources || activeLesson.resources.length === 0) && (
+                       <p className="text-[9px] font-black uppercase text-gray-700 text-center py-4">Sin materiales adicionales</p>
+                    )}
                   </div>
                 </div>
               </div>
