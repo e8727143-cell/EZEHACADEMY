@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Play, CheckCircle, Menu, X, ChevronDown, FileText, LogOut, Clock, ExternalLink, Bookmark
+  Play, CheckCircle, Menu, X, FileText, LogOut, Clock, ExternalLink, Bookmark
 } from 'lucide-react';
 import { User, Module, Lesson } from '../types.ts';
 import { Link } from 'react-router-dom';
@@ -19,7 +19,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [modules, setModules] = useState<Module[]>([]);
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
   const [isSidebarOpen, setSidebarOpen] = useState(true);
-  const [expandedModules, setExpandedModules] = useState<string[]>([]);
   const [progress, setProgress] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -34,7 +33,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       setModules(data);
       if (data.length > 0 && data[0].lessons?.length > 0) {
         setActiveLesson(data[0].lessons[0]);
-        setExpandedModules([data[0].id]);
       }
     }
     setLoading(false);
@@ -138,7 +136,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
               <div className="mb-12">
                 <VideoPlayer 
                   url={activeLesson.video_url} 
-                  thumbnail="https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=1000&auto=format&fit=crop" 
+                  title={activeLesson.title}
                 />
               </div>
 
