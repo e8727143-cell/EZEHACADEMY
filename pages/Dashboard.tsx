@@ -2,26 +2,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Play, 
-  CheckCircle, 
-  Menu, 
-  X, 
-  ChevronRight, 
-  ChevronDown,
-  FileText, 
-  LogOut, 
-  Settings,
-  Star,
-  Clock,
-  ExternalLink,
-  LayoutDashboard,
-  AlertCircle,
-  RefreshCw
+  Play, CheckCircle, Menu, X, ChevronDown, FileText, LogOut, Settings, Clock, ExternalLink, AlertCircle, RefreshCw
 } from 'lucide-react';
-import { User, Module, Lesson } from '../types';
+import { User, Module, Lesson } from '../types.ts';
 import { Link } from 'react-router-dom';
 import { marked } from 'marked';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase.ts';
 import ReactPlayer from 'react-player';
 
 interface DashboardProps {
@@ -37,7 +23,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [progress, setProgress] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [videoError, setVideoError] = useState(false);
-  const [videoKey, setVideoKey] = useState(0); // Para forzar el remonte del componente
+  const [videoKey, setVideoKey] = useState(0);
   const playerRef = useRef<any>(null);
 
   useEffect(() => {
@@ -46,11 +32,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   }, []);
 
   async function fetchContent() {
-    const { data, error } = await supabase
-      .from('modules')
-      .select('*, lessons(*)')
-      .order('order_index');
-
+    const { data } = await supabase.from('modules').select('*, lessons(*)').order('order_index');
     if (data) {
       setModules(data);
       if (data.length > 0 && data[0].lessons?.length > 0) {
@@ -62,17 +44,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   }
 
   async function fetchProgress() {
-    const { data } = await supabase
-      .from('user_progress')
-      .select('lesson_id')
-      .eq('user_id', user.id);
-    
+    const { data } = await supabase.from('user_progress').select('lesson_id').eq('user_id', user.id);
     if (data) setProgress(data.map((p: any) => p.lesson_id));
   }
 
   const onToggleProgress = async (lessonId: string) => {
-    const isCompleted = progress.includes(lessonId);
-    if (isCompleted) {
+    if (progress.includes(lessonId)) {
       await supabase.from('user_progress').delete().eq('user_id', user.id).eq('lesson_id', lessonId);
       setProgress(prev => prev.filter(id => id !== lessonId));
     } else {
@@ -81,243 +58,105 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     }
   };
 
-  const totalLessons = useMemo(() => modules.reduce((acc, mod) => acc + (mod.lessons?.length || 0), 0), [modules]);
-  const progressPercent = totalLessons > 0 ? Math.round((progress.length / totalLessons) * 100) : 0;
+  const progressPercent = useMemo(() => {
+    const total = modules.reduce((acc, mod) => acc + (mod.lessons?.length || 0), 0);
+    return total > 0 ? Math.round((progress.length / total) * 100) : 0;
+  }, [modules, progress]);
 
-  const htmlDescription = useMemo(() => {
-    return activeLesson ? marked.parse(activeLesson.description || '') : '';
-  }, [activeLesson]);
+  const htmlDescription = useMemo(() => activeLesson ? marked.parse(activeLesson.description || '') : '', [activeLesson]);
 
-  /**
-   * FIX DEFINITIVO ERROR 153:
-   * 1. Extrae ID de YouTube.
-   * 2. Formatea a youtube-nocookie.com/embed/ID.
-   * 3. Inyecta origin y enablejsapi.
-   */
   const formatYoutubeUrl = (url: string) => {
-    if (!url) return "";
-    
-    // Regex robusto para YouTube
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = url.match(regExp);
-    
+    const match = url?.match(regExp);
     if (match && match[2].length === 11) {
       const videoId = match[2];
       const origin = encodeURIComponent(window.location.origin);
-      // Retornamos el formato solicitado con parámetros de limpieza
-      return `https://www.youtube-nocookie.com/embed/${videoId}?enablejsapi=1&origin=${origin}&rel=0&modestbranding=1&autoplay=0`;
+      return `https://www.youtube-nocookie.com/embed/${videoId}?enablejsapi=1&origin=${origin}&rel=0&modestbranding=1`;
     }
-    
-    return url; // Si no es YouTube (Vimeo, etc), dejar pasar el link original
+    return url;
   };
 
-  const processedVideoUrl = useMemo(() => {
-    setVideoError(false);
-    return activeLesson ? formatYoutubeUrl(activeLesson.video_url) : "";
-  }, [activeLesson]);
-
-  const handleRetry = () => {
-    setVideoError(false);
-    setVideoKey(prev => prev + 1);
-  };
-
-  if (loading) return (
-    <div className="min-h-screen bg-black flex items-center justify-center">
-      <div className="w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) return null;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col">
-      <nav className="fixed top-0 w-full z-50 bg-black/60 backdrop-blur-2xl border-b border-white/5 px-6 py-4 flex justify-between items-center">
+    <div className="min-h-screen bg-[#050505] text-white flex flex-col">
+      <nav className="fixed top-0 w-full z-50 bg-black/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex justify-between items-center">
         <div className="flex items-center gap-6">
-          <button onClick={() => setSidebarOpen(!isSidebarOpen)} className="p-2.5 hover:bg-white/10 rounded-xl transition-all">
-            {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-          <div className="text-2xl font-black tracking-tighter flex items-center gap-2">
-            <span className="text-red-600">EZEH</span><span className="text-white hidden sm:inline">ACADEMY</span>
-          </div>
+          <button onClick={() => setSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-white/5 rounded-xl transition-all"><Menu size={20} /></button>
+          <div className="text-2xl font-black italic tracking-tighter"><span className="text-red-600">EZEH</span> ACADEMY</div>
         </div>
-
         <div className="flex items-center gap-6">
-          <div className="hidden md:flex flex-col items-end gap-1.5">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Progreso Total</span>
-              <span className="text-xs font-bold text-red-500">{progressPercent}%</span>
-            </div>
-            <div className="w-40 h-1.5 bg-white/10 rounded-full overflow-hidden">
-              <motion.div initial={{ width: 0 }} animate={{ width: `${progressPercent}%` }} className="h-full bg-red-600" />
-            </div>
+          <div className="hidden md:block text-right">
+            <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Progreso: {progressPercent}%</p>
+            <div className="w-32 h-1 bg-white/5 rounded-full mt-1 overflow-hidden"><div className="h-full bg-red-600 transition-all duration-1000" style={{ width: `${progressPercent}%` }} /></div>
           </div>
-
-          <div className="flex items-center gap-4">
-            {user.role === 'admin' && (
-              <Link to="/admin" className="p-2 text-gray-400 hover:text-white transition-colors" title="Panel de Administración"><Settings size={20} /></Link>
-            )}
-            <button onClick={onLogout} className="text-gray-400 hover:text-red-500 transition-colors" title="Cerrar Sesión"><LogOut size={18} /></button>
-            <div className="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center font-black text-sm uppercase">{user.fullName.charAt(0)}</div>
-          </div>
+          <button onClick={onLogout} className="text-gray-500 hover:text-red-600 transition-colors"><LogOut size={18}/></button>
+          <div className="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center font-black">{user.fullName.charAt(0)}</div>
         </div>
       </nav>
 
       <div className="flex flex-1 pt-[72px] h-screen overflow-hidden">
         <AnimatePresence>
           {isSidebarOpen && (
-            <motion.aside 
-              initial={{ x: -350 }} 
-              animate={{ x: 0 }} 
-              exit={{ x: -350 }} 
-              className="w-full lg:w-[350px] bg-[#0d0d0d] border-r border-white/5 overflow-y-auto custom-scrollbar"
-            >
-              <div className="p-6">
-                <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-6">Contenido del Curso</h2>
-                {modules.length === 0 ? (
-                  <p className="text-[10px] text-gray-600 font-bold uppercase tracking-widest text-center py-10">Cargando módulos...</p>
-                ) : modules.map((module, mIdx) => (
-                  <div key={module.id} className="mb-4">
-                    <button 
-                      onClick={() => setExpandedModules(prev => prev.includes(module.id) ? prev.filter(i => i !== module.id) : [...prev, module.id])} 
-                      className="w-full flex justify-between p-3 rounded-xl hover:bg-white/5 transition-colors group"
-                    >
-                      <div className="text-left">
-                        <p className="text-[9px] font-black text-red-600 uppercase">MÓDULO {mIdx + 1}</p>
-                        <h3 className="text-sm font-bold group-hover:text-red-500 transition-colors">{module.title}</h3>
-                      </div>
-                      <ChevronDown size={18} className={`transition-transform text-gray-600 ${expandedModules.includes(module.id) ? 'rotate-180 text-white' : ''}`} />
-                    </button>
-                    {expandedModules.includes(module.id) && module.lessons?.map(lesson => (
-                      <button 
-                        key={lesson.id} 
-                        onClick={() => {
-                          setActiveLesson(lesson);
-                          if (window.innerWidth < 1024) setSidebarOpen(false);
-                        }} 
-                        className={`w-full flex items-center gap-4 p-4 pl-6 text-left transition-all rounded-xl mt-1 ${activeLesson?.id === lesson.id ? 'bg-red-600/10 text-white font-bold' : 'text-gray-500 hover:bg-white/5'}`}
-                      >
-                        {progress.includes(lesson.id) ? <CheckCircle className="text-green-500" size={14} /> : <Play size={14} className={activeLesson?.id === lesson.id ? "text-red-500" : ""} />}
-                        <span className="text-xs truncate">{lesson.title}</span>
+            <motion.aside initial={{ x: -350 }} animate={{ x: 0 }} exit={{ x: -350 }} className="w-[350px] bg-[#080808] border-r border-white/5 overflow-y-auto custom-scrollbar p-6">
+              <h2 className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-6">Contenido</h2>
+              {modules.map((mod, i) => (
+                <div key={mod.id} className="mb-4">
+                  <div className="text-[9px] font-black text-red-600 uppercase mb-1">MÓDULO {i + 1}</div>
+                  <h3 className="text-sm font-black uppercase tracking-tighter mb-2">{mod.title}</h3>
+                  <div className="space-y-1">
+                    {mod.lessons?.map(l => (
+                      <button key={l.id} onClick={() => setActiveLesson(l)} className={`w-full text-left p-3 rounded-xl text-xs font-bold transition-all flex items-center gap-3 ${activeLesson?.id === l.id ? 'bg-red-600 text-white shadow-xl shadow-red-600/10' : 'text-gray-500 hover:bg-white/5'}`}>
+                        {progress.includes(l.id) ? <CheckCircle size={14} className="text-green-500"/> : <Play size={12}/>}
+                        <span className="truncate">{l.title}</span>
                       </button>
                     ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </motion.aside>
           )}
         </AnimatePresence>
 
-        <main className="flex-1 overflow-y-auto bg-black p-4 lg:p-12 custom-scrollbar">
+        <main className="flex-1 overflow-y-auto bg-[#050505] p-6 lg:p-12 custom-scrollbar">
           {activeLesson ? (
-            <div className="max-w-5xl mx-auto">
-              
-              {/* REPRODUCTOR MASTERCLASS EDITION */}
-              <div className="relative aspect-video bg-[#050505] rounded-[2rem] overflow-hidden border border-white/5 mb-10 shadow-[0_0_100px_rgba(239,68,68,0.08)] group">
+            <div className="max-w-5xl mx-auto animate-in fade-in duration-500">
+              <div className="aspect-video bg-black rounded-[2.5rem] overflow-hidden border border-white/5 mb-10 shadow-2xl relative group">
                 {!videoError ? (
-                  <ReactPlayer
-                    key={videoKey}
-                    ref={playerRef}
-                    url={processedVideoUrl}
-                    width="100%"
-                    height="100%"
-                    controls={true}
-                    onError={() => setVideoError(true)}
-                    config={{
-                      youtube: {
-                        playerVars: { 
-                          origin: window.location.origin,
-                          enablejsapi: 1,
-                          modestbranding: 1,
-                          rel: 0,
-                          showinfo: 0,
-                          iv_load_policy: 3
-                        },
-                        embedOptions: {
-                          host: 'https://www.youtube-nocookie.com'
-                        }
-                      }
-                    }}
-                  />
+                  <ReactPlayer key={videoKey} url={formatYoutubeUrl(activeLesson.video_url)} width="100%" height="100%" controls playing={false} onError={() => setVideoError(true)} config={{ youtube: { playerVars: { origin: window.location.origin } } }} />
                 ) : (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black text-center p-10">
-                    <AlertCircle size={64} className="text-red-600 mb-6 opacity-40 animate-pulse" />
-                    <h2 className="text-2xl font-black uppercase tracking-tighter mb-4 italic">ERROR DE <span className="text-red-600">REPRODUCCIÓN</span></h2>
-                    <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.3em] max-w-sm leading-loose mb-10">
-                      Error 153 detectado. Se ha aplicado el protocolo de seguridad Origin-Bypass, pero la red sigue rechazando el flujo de video.
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-5">
-                      <button 
-                        onClick={handleRetry} 
-                        className="flex items-center justify-center gap-3 bg-white text-black px-10 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-red-600 hover:text-white transition-all active:scale-95 shadow-2xl shadow-white/5"
-                      >
-                        <RefreshCw size={18} /> Forzar Recarga
-                      </button>
-                      <a 
-                        href={activeLesson.video_url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-3 bg-red-600/10 text-red-500 border border-red-600/20 px-10 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-red-600 hover:text-white transition-all active:scale-95"
-                      >
-                        <ExternalLink size={18} /> Abrir en Externo
-                      </a>
-                    </div>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-10">
+                    <AlertCircle size={48} className="text-red-600 mb-4 opacity-50" />
+                    <h2 className="text-lg font-black uppercase mb-4">Error de Reproducción</h2>
+                    <button onClick={() => setVideoKey(k => k + 1)} className="bg-white text-black px-6 py-3 rounded-xl font-black uppercase text-[10px] hover:bg-red-600 hover:text-white transition-all"><RefreshCw size={14} className="inline mr-2"/> Reintentar</button>
                   </div>
                 )}
-                {/* Overlay Estético de Branding Inferior */}
-                <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black via-black/40 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
               </div>
-
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
                 <div className="lg:col-span-2">
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="px-3 py-1 bg-red-600/10 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-full">Lección Actual</span>
-                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest flex items-center gap-1"><Clock size={12}/> {activeLesson.duration || '10:00'}</span>
-                  </div>
-                  <h1 className="text-4xl font-black mb-6 tracking-tighter italic uppercase">{activeLesson.title}</h1>
-                  <div 
-                    className="prose prose-invert max-w-none text-gray-400 font-medium" 
-                    dangerouslySetInnerHTML={{ __html: htmlDescription }} 
-                  />
+                  <h1 className="text-4xl font-black italic tracking-tighter uppercase mb-6">{activeLesson.title}</h1>
+                  <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: htmlDescription }} />
                 </div>
                 <div className="space-y-6">
-                  <button 
-                    onClick={() => onToggleProgress(activeLesson.id)} 
-                    className={`w-full py-5 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] transition-all shadow-2xl ${progress.includes(activeLesson.id) ? 'bg-green-600/10 text-green-500 border border-green-600/20' : 'bg-white text-black hover:bg-red-600 hover:text-white active:scale-95 shadow-white/5'}`}
-                  >
-                    {progress.includes(activeLesson.id) ? '✓ Completado satisfactoriamente' : 'Marcar como Completado'}
+                  <button onClick={() => onToggleProgress(activeLesson.id)} className={`w-full py-5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${progress.includes(activeLesson.id) ? 'bg-green-600/10 text-green-500 border border-green-600/20' : 'bg-white text-black hover:bg-red-600 hover:text-white'}`}>
+                    {progress.includes(activeLesson.id) ? 'Completado ✓' : 'Marcar como Visto'}
                   </button>
-                  <div className="p-8 bg-[#0d0d0d] border border-white/5 rounded-[3rem] shadow-2xl">
-                    <h3 className="text-[10px] font-black uppercase text-gray-500 mb-8 tracking-[0.3em] flex items-center gap-3">
-                      <FileText size={16} className="text-red-600"/> Librería de Recursos
-                    </h3>
-                    {(activeLesson.resources as any[])?.length > 0 ? (activeLesson.resources as any[]).map((r, i) => (
-                      <a 
-                        key={i} 
-                        href={r.url} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="flex items-center justify-between p-5 bg-white/5 rounded-2xl text-[11px] font-bold hover:bg-white/10 transition-all mb-4 group border border-transparent hover:border-red-600/30"
-                      >
-                        <span className="flex items-center gap-4 truncate pr-4">
-                          <FileText size={16} className="text-gray-500 group-hover:text-red-600 flex-shrink-0"/> 
-                          <span className="truncate uppercase">{r.name}</span>
-                        </span>
-                        <ExternalLink size={14} className="text-gray-700 group-hover:text-white flex-shrink-0"/>
+                  <div className="p-8 bg-white/5 border border-white/5 rounded-[2.5rem]">
+                    <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-6">Recursos</h3>
+                    {activeLesson.resources?.map((r, i) => (
+                      <a key={i} href={r.url} className="flex items-center justify-between p-4 bg-black/40 rounded-xl mb-2 hover:bg-red-600 group transition-all">
+                        <span className="text-[10px] font-bold uppercase truncate pr-4">{r.name}</span>
+                        <ExternalLink size={12} className="text-gray-600 group-hover:text-white" />
                       </a>
-                    )) : (
-                      <div className="text-center py-10 opacity-20 border-2 border-dashed border-white/5 rounded-3xl">
-                        <p className="text-[9px] font-black uppercase tracking-widest">Sin materiales de apoyo</p>
-                      </div>
-                    )}
+                    ))}
                   </div>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="h-full flex flex-col items-center justify-center text-gray-800 p-20 text-center">
-               <div className="w-32 h-32 bg-white/5 rounded-full flex items-center justify-center mb-10 animate-pulse">
-                  <Play size={48} className="opacity-20 ml-2" />
-               </div>
-               <h3 className="text-xl font-black uppercase tracking-[0.4em] italic">EZEH <span className="text-red-600">DASHBOARD</span></h3>
-               <p className="text-[10px] font-bold opacity-30 mt-4 uppercase tracking-widest max-w-xs leading-loose">Selecciona un módulo en la barra lateral para inyectar conocimiento digital.</p>
+            <div className="h-full flex flex-col items-center justify-center text-center">
+              <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-6 animate-pulse"><Play className="opacity-20 ml-1" /></div>
+              <h3 className="text-xl font-black uppercase tracking-widest italic">Selecciona una clase</h3>
             </div>
           )}
         </main>

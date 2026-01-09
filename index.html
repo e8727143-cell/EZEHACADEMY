@@ -10,11 +10,19 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
+      :root {
+        --brand-red: #ef4444;
+      }
       body {
         font-family: 'Inter', sans-serif;
-        background-color: #0a0a0a;
+        background: radial-gradient(circle at center, #0f0f0f 0%, #050505 100%);
         color: white;
+        margin: 0;
+        min-height: 100vh;
         overflow-x: hidden;
+      }
+      #root {
+        min-height: 100vh;
       }
       .custom-scrollbar::-webkit-scrollbar {
         width: 6px;
@@ -27,14 +35,11 @@
         border-radius: 10px;
       }
       .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background: #ef4444;
+        background: var(--brand-red);
       }
       .prose h1, .prose h2, .prose h3 { color: white !important; font-weight: 800 !important; }
       .prose p { color: #a1a1aa !important; line-height: 1.8; }
       .prose strong { color: white !important; }
-      .video-shadow {
-        box-shadow: 0 0 50px -12px rgba(239, 68, 68, 0.15);
-      }
     </style>
   <script type="importmap">
 {
@@ -45,6 +50,7 @@
     "react-router-dom": "https://esm.sh/react-router-dom@^7.12.0",
     "framer-motion": "https://esm.sh/framer-motion@^12.25.0",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react-dom": "https://esm.sh/react-dom@^19.2.3",
     "marked": "https://esm.sh/marked@12.0.0",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.48.1",
     "react-player": "https://esm.sh/react-player@2.16.0"
@@ -54,5 +60,7 @@
 </head>
   <body>
     <div id="root"></div>
+    <!-- ETIQUETA CRÍTICA: Punto de entrada de la aplicación -->
+    <script type="module" src="index.tsx"></script>
   </body>
 </html>

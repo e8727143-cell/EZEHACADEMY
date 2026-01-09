@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Admin from './pages/Admin';
-import { User } from './types';
-import { supabase, ADMIN_EMAIL } from './lib/supabase';
-import { ShieldAlert, Home, LogOut } from 'lucide-react';
+import Login from './pages/Login.tsx';
+import Dashboard from './pages/Dashboard.tsx';
+import Admin from './pages/Admin.tsx';
+import { User } from './types.ts';
+import { supabase, ADMIN_EMAIL } from './lib/supabase.ts';
+import { ShieldAlert, Home, LogOut, Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -54,42 +54,34 @@ const App: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-6">
-        <div className="relative w-16 h-16">
-          <div className="absolute inset-0 border-4 border-red-600/20 rounded-full" />
-          <div className="absolute inset-0 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center gap-6">
+        <div className="relative w-20 h-20">
+          <div className="absolute inset-0 border-4 border-red-600/10 rounded-full" />
+          <div className="absolute inset-0 border-4 border-red-600 border-t-transparent rounded-full animate-spin shadow-[0_0_15px_rgba(239,68,68,0.5)]" />
         </div>
         <div className="text-center">
-          <p className="text-white font-black uppercase tracking-[0.3em] text-xs">EZEH ACADEMY</p>
-          <p className="text-gray-600 text-[10px] mt-2 animate-pulse uppercase">Autenticando sesión...</p>
+          <p className="text-white font-black uppercase tracking-[0.5em] text-sm italic">EZEH ACADEMY</p>
+          <div className="flex items-center justify-center gap-2 mt-3">
+             <Loader2 size={12} className="animate-spin text-red-600" />
+             <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">Sincronizando acceso...</p>
+          </div>
         </div>
       </div>
     );
   }
 
-  // Componente de Acceso Denegado
   const AccessDenied = () => (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
-      <div className="w-20 h-20 bg-red-600/10 border border-red-600/20 rounded-full flex items-center justify-center mb-6 shadow-[0_0_50px_rgba(220,38,38,0.2)]">
+      <div className="w-20 h-20 bg-red-600/10 border border-red-600/20 rounded-full flex items-center justify-center mb-6">
         <ShieldAlert size={40} className="text-red-600" />
       </div>
-      <h1 className="text-3xl font-black mb-4 uppercase tracking-tighter">ACCESO DENEGADO</h1>
-      <p className="text-gray-500 max-w-md mb-8 text-sm font-medium leading-relaxed">
-        No tienes privilegios de administrador para acceder a esta sección protegida. 
-        Si crees que esto es un error, contacta con el soporte oficial.
+      <h1 className="text-3xl font-black mb-4 uppercase italic">ACCESO DENEGADO</h1>
+      <p className="text-gray-500 max-w-md mb-8 text-sm font-medium">
+        No tienes privilegios de administrador. Contacta al soporte si esto es un error.
       </p>
       <div className="flex gap-4">
-        <button 
-          onClick={() => window.location.hash = '#/dashboard'}
-          className="flex items-center gap-2 bg-white text-black px-8 py-4 rounded-2xl font-black uppercase text-xs hover:bg-gray-200 transition-all active:scale-95"
-        >
-          <Home size={18} /> Ir al Inicio
-        </button>
-        <button 
-          onClick={handleLogout}
-          className="flex items-center gap-2 bg-red-600/10 text-red-500 px-8 py-4 rounded-2xl font-black uppercase text-xs hover:bg-red-600 hover:text-white transition-all border border-red-600/20 active:scale-95"
-        >
-          <LogOut size={18} /> Cerrar Sesión
+        <button onClick={() => window.location.hash = '#/dashboard'} className="bg-white text-black px-8 py-4 rounded-2xl font-black uppercase text-xs hover:bg-red-600 hover:text-white transition-all">
+          <Home size={18} className="inline mr-2"/> Inicio
         </button>
       </div>
     </div>
@@ -98,24 +90,9 @@ const App: React.FC = () => {
   return (
     <Router>
       <Routes>
-        <Route 
-          path="/" 
-          element={user ? <Navigate to="/dashboard" /> : <Login />} 
-        />
-        <Route 
-          path="/dashboard" 
-          element={user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/" />} 
-        />
-        <Route 
-          path="/admin" 
-          element={
-            user ? (
-              user.role === 'admin' ? <Admin onLogout={handleLogout} /> : <AccessDenied />
-            ) : (
-              <Navigate to="/" />
-            )
-          } 
-        />
+        <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Login />} />
+        <Route path="/dashboard" element={user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/admin" element={user ? (user.role === 'admin' ? <Admin onLogout={handleLogout} /> : <AccessDenied />) : <Navigate to="/" />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>
