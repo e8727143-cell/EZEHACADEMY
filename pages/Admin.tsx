@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Plus, Trash2, Edit3, ChevronLeft, Save, Users, BookOpen, LogOut, X, Video, FileText, Loader2, Link as LinkIcon, PlusCircle, AlertTriangle, Database
+  Plus, Trash2, Edit3, ChevronLeft, Save, Users, BookOpen, LogOut, X, Video, FileText, Loader2, AlertTriangle, Database, ShieldCheck, Globe, Mail, Calendar, User as UserIcon
 } from 'lucide-react';
-import { Module, Lesson } from '../types';
+import { Module, Lesson, User } from '../types';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
@@ -19,6 +19,11 @@ const Admin: React.FC<AdminProps> = ({ onLogout }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   
+  // Estadísticas de Usuarios
+  const [students, setStudents] = useState<User[]>([]);
+  const [totalStudents, setTotalStudents] = useState(0);
+  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+  
   // Estados para creación inline
   const [isAddingModule, setIsAddingModule] = useState(false);
   const [newModuleTitle, setNewModuleTitle] = useState('');
@@ -29,6 +34,36 @@ const Admin: React.FC<AdminProps> = ({ onLogout }) => {
 
   useEffect(() => {
     fetchContent();
+    fetchUserList();
+
+    // 1. Monitoreo REAL-TIME de la base de datos (Nuevos registros)
+    const dbChannel = supabase
+      .channel('admin-profiles-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        fetchUserList();
+      })
+      .subscribe();
+
+    // 2. Monitoreo REAL-TIME de Presencia (Online/Offline instantáneo)
+    const presenceChannel = supabase.channel('online-users');
+
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const state = presenceChannel.presenceState();
+        const activeIds = new Set<string>();
+        
+        Object.keys(state).forEach((key) => {
+          activeIds.add(key);
+        });
+        
+        setOnlineUserIds(activeIds);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(dbChannel);
+      supabase.removeChannel(presenceChannel);
+    };
   }, []);
 
   useEffect(() => {
@@ -37,8 +72,37 @@ const Admin: React.FC<AdminProps> = ({ onLogout }) => {
     }
   }, [isAddingModule]);
 
+  const isUserOnline = (userId: string) => {
+    return onlineUserIds.has(userId);
+  };
+
+  async function fetchUserList() {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      const mappedStudents = (data || []).map((p: any) => ({
+        id: p.id,
+        fullName: p.full_name || 'Sin nombre',
+        email: p.email || 'S/E',
+        role: p.role || 'student',
+        last_seen: p.last_seen,
+        created_at: p.created_at,
+        progress: []
+      })) as User[];
+
+      setStudents(mappedStudents);
+      setTotalStudents(mappedStudents.length);
+    } catch (err) {
+      console.error("Error fetching user stats:", err);
+    }
+  }
+
   async function fetchContent() {
-    console.log('--- ADMIN: Sincronizando datos con Supabase ---');
     setLoading(true);
     setLastError(null);
     try {
@@ -55,7 +119,6 @@ const Admin: React.FC<AdminProps> = ({ onLogout }) => {
       }));
 
       setModules(sortedData);
-      console.log('--- ADMIN: Datos cargados ---', sortedData.length, 'módulos encontrados');
     } catch (err: any) {
       console.error("Error en fetchContent:", err);
       setLastError(`Error de conexión: ${err.message}`);
@@ -65,14 +128,9 @@ const Admin: React.FC<AdminProps> = ({ onLogout }) => {
   }
 
   const handleCreateModule = async () => {
-    console.log('--- ACCIÓN: Iniciando creación de módulo ---');
-    
-    // 1. Verificar sesión activa
     const { data: { session } } = await supabase.auth.getSession();
-    console.log("Usuario actual:", session?.user);
-
     if (!session) {
-      alert("❌ ERROR: No hay una sesión activa. Por favor, cierra sesión y vuelve a entrar.");
+      alert("❌ ERROR: No hay una sesión activa.");
       setIsAddingModule(false);
       return;
     }
@@ -84,53 +142,26 @@ const Admin: React.FC<AdminProps> = ({ onLogout }) => {
 
     setIsProcessing(true);
     try {
-      // 2. Intentamos obtener el ID de un curso existente por si la tabla lo requiere (Foreign Key)
-      const { data: courses, error: courseError } = await supabase.from('courses').select('id').limit(1);
-      
-      if (courseError) {
-        console.warn("No se pudo verificar la tabla de cursos:", courseError);
-      }
-
+      const { data: courses } = await supabase.from('courses').select('id').limit(1);
       const courseId = courses && courses.length > 0 ? courses[0].id : null;
 
-      // 3. Construir payload SIN campo 'id' (Supabase lo genera solo con gen_random_uuid())
       const payload: any = { 
         title: newModuleTitle.trim(), 
         order_index: modules.length
       };
 
-      if (courseId) {
-        payload.course_id = courseId;
-      }
+      if (courseId) payload.course_id = courseId;
 
-      console.log('--- SUPABASE INSERT PAYLOAD ---', payload);
-
-      // 4. Inserción
-      const { data, error } = await supabase
-        .from('modules')
-        .insert(payload)
-        .select();
-
-      if (error) {
-        console.error("--- ERROR AL INSERTAR MÓDULO ---", error);
-        alert(`❌ ERROR DE SUPABASE:\n\nCódigo: ${error.code}\nMensaje: ${error.message}\n\nDetalles: ${error.details || 'Sin detalles'}`);
-        throw error;
-      }
-
-      console.log('--- ÉXITO: Módulo creado ---', data);
+      const { error } = await supabase.from('modules').insert(payload);
+      if (error) throw error;
       
-      // 5. Limpiar y refrescar
       setNewModuleTitle('');
       setIsAddingModule(false);
       await fetchContent();
-      
     } catch (err: any) {
-      console.error("Excepción crítica en handleCreateModule:", err);
-      // No necesitamos alert aquí porque el error de Supabase ya lo lanza arriba
+      alert(`❌ ERROR: ${err.message}`);
     } finally {
-      // 6. IMPORTANTE: Resetear siempre el estado de carga para evitar bloqueo infinito
       setIsProcessing(false);
-      console.log('--- ACCIÓN FINALIZADA ---');
     }
   };
 
@@ -145,29 +176,24 @@ const Admin: React.FC<AdminProps> = ({ onLogout }) => {
       const targetModule = modules.find(m => m.id === moduleId);
       const nextIndex = targetModule?.lessons?.length || 0;
 
-      // SIN campo ID manual
       const payload = { 
         module_id: moduleId, 
         title: newLessonTitle.trim(), 
         video_url: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
         description: '### Nueva Clase\nEscribe aquí el contenido educativo.',
-        duration: '10:00',
+        duration: '00:00',
         resources: [],
         order_index: nextIndex
       };
 
       const { error } = await supabase.from('lessons').insert(payload);
-
-      if (error) {
-        alert(`❌ ERROR AL CREAR LECCIÓN: ${error.message}`);
-        throw error;
-      }
+      if (error) throw error;
 
       setNewLessonTitle('');
       setAddingLessonToModule(null);
       await fetchContent();
     } catch (err: any) {
-      console.error(err);
+      alert(`❌ ERROR: ${err.message}`);
     } finally {
       setIsProcessing(false);
     }
@@ -181,7 +207,6 @@ const Admin: React.FC<AdminProps> = ({ onLogout }) => {
         title: editingLesson.title,
         video_url: editingLesson.video_url,
         description: editingLesson.description,
-        duration: editingLesson.duration,
         resources: editingLesson.resources
       }).eq('id', editingLesson.id);
 
@@ -233,7 +258,7 @@ const Admin: React.FC<AdminProps> = ({ onLogout }) => {
           <button onClick={() => setActiveTab('content')} className={`px-10 py-5 rounded-[1.5rem] font-black text-[10px] uppercase tracking-[0.2em] border transition-all ${activeTab === 'content' ? 'bg-white text-black border-white shadow-2xl shadow-white/5' : 'bg-white/5 text-gray-500 border-white/5 hover:bg-white/10'}`}>
             <BookOpen size={16} className="inline mr-3"/> Gestión de Contenido
           </button>
-          <button onClick={() => setActiveTab('users')} className={`px-10 py-5 rounded-[1.5rem] font-black text-[10px] uppercase tracking-[0.2em] border transition-all ${activeTab === 'users' ? 'bg-white text-black border-white shadow-2xl shadow-white/5' : 'bg-white/5 text-gray-500 border-white/5 hover:bg-white/10'}`}>
+          <button onClick={() => { setActiveTab('users'); fetchUserList(); }} className={`px-10 py-5 rounded-[1.5rem] font-black text-[10px] uppercase tracking-[0.2em] border transition-all ${activeTab === 'users' ? 'bg-white text-black border-white shadow-2xl shadow-white/5' : 'bg-white/5 text-gray-500 border-white/5 hover:bg-white/10'}`}>
             <Users size={16} className="inline mr-3"/> Alumnos y Acceso
           </button>
         </div>
@@ -375,10 +400,6 @@ const Admin: React.FC<AdminProps> = ({ onLogout }) => {
                         <input type="text" value={editingLesson.video_url} onChange={(e) => setEditingLesson({...editingLesson, video_url: e.target.value})} className="w-full bg-black border border-white/5 rounded-3xl p-5 text-xs font-mono text-gray-500 focus:border-red-600 outline-none" />
                       </div>
                       <div className="space-y-3">
-                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-2">Duración (Ej: 15:00)</label>
-                        <input type="text" value={editingLesson.duration} onChange={(e) => setEditingLesson({...editingLesson, duration: e.target.value})} className="w-full bg-black border border-white/5 rounded-3xl p-5 font-bold text-sm focus:border-red-600 outline-none text-gray-200" />
-                      </div>
-                      <div className="space-y-3">
                         <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest ml-2">Materiales del Alumno</label>
                         <div className="bg-black/80 border border-white/5 rounded-[2rem] p-6 space-y-3 min-h-[120px]">
                           {editingLesson.resources?.map((res, idx) => (
@@ -422,23 +443,117 @@ const Admin: React.FC<AdminProps> = ({ onLogout }) => {
             </div>
           </div>
         ) : (
-          <div className="bg-[#0a0a0a] border border-white/5 rounded-[4rem] p-24 text-center shadow-2xl">
-            <Users size={80} className="text-red-600 mx-auto mb-10" />
-            <h2 className="text-4xl font-black mb-6 uppercase tracking-tighter italic">EZEH <span className="text-red-600">AUTH</span> CONTROL</h2>
-            <p className="text-gray-500 max-w-xl mx-auto text-sm font-medium leading-relaxed mb-16 px-4">
-              Gestiona los privilegios de tus alumnos directamente desde el panel de autenticación de Supabase para máxima seguridad.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-              {[
-                { label: 'Módulos Totales', val: modules.length },
-                { label: 'Status Sistema', val: 'Online' },
-                { label: 'Nivel Acceso', val: 'Full Admin' }
-              ].map((stat, i) => (
-                <div key={i} className="p-10 bg-black/40 border border-white/5 rounded-[2.5rem]">
-                  <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-3">{stat.label}</p>
-                  <p className="text-4xl font-black text-white tracking-tighter">{stat.val}</p>
+          <div className="space-y-12 animate-in fade-in duration-500">
+            {/* CARDS DE ESTADÍSTICAS */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="p-8 bg-[#0a0a0a] border border-white/5 rounded-[3rem] group hover:border-red-600/20 transition-all hover:bg-red-600/[0.02] shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-red-600/5 blur-3xl rounded-full" />
+                <div className="flex justify-between items-start mb-4">
+                  <ShieldCheck size={28} className="text-red-600" />
                 </div>
-              ))}
+                <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2">Total Alumnos</p>
+                <p className="text-5xl font-black text-white tracking-tighter">{totalStudents}</p>
+              </div>
+
+              <div className="p-8 bg-[#0a0a0a] border border-white/5 rounded-[3rem] group hover:border-green-600/20 transition-all hover:bg-green-600/[0.02] shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-green-600/5 blur-3xl rounded-full" />
+                <div className="flex justify-between items-start mb-4">
+                  <div className="relative">
+                     <div className="absolute w-2 h-2 bg-green-500 rounded-full animate-ping" />
+                     <Globe size={28} className="text-green-500" />
+                  </div>
+                </div>
+                <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2">Alumnos Online</p>
+                <p className="text-5xl font-black text-green-500 tracking-tighter">{onlineUserIds.size}</p>
+              </div>
+
+              <div className="p-8 bg-[#0a0a0a] border border-white/5 rounded-[3rem] shadow-2xl relative overflow-hidden">
+                <div className="flex justify-between items-start mb-4">
+                  <BookOpen size={28} className="text-gray-700" />
+                </div>
+                <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2">Módulos</p>
+                <p className="text-5xl font-black text-white tracking-tighter">{modules.length}</p>
+              </div>
+
+              <div className="p-8 bg-[#0a0a0a] border border-white/5 rounded-[3rem] shadow-2xl relative overflow-hidden">
+                <div className="flex justify-between items-start mb-4">
+                  <Database size={28} className="text-gray-700" />
+                </div>
+                <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2">Cloud Engine</p>
+                <p className="text-[11px] font-black text-green-500 tracking-[0.2em] mt-8 uppercase italic leading-none">Status: Óptimo</p>
+              </div>
+            </div>
+
+            {/* LISTADO DE ALUMNOS */}
+            <div className="bg-[#0a0a0a] border border-white/5 rounded-[4rem] overflow-hidden shadow-2xl">
+              <div className="p-10 border-b border-white/5 flex justify-between items-center bg-white/[0.01]">
+                <div>
+                   <h2 className="text-2xl font-black uppercase tracking-tighter italic">Comunidad <span className="text-red-600">EZEH</span></h2>
+                   <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.4em] mt-2">Monitoreo Presence API activado</p>
+                </div>
+                <button 
+                  onClick={fetchUserList}
+                  className="px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all"
+                >
+                  Refrescar Lista
+                </button>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="border-b border-white/5 bg-white/[0.01]">
+                    <tr>
+                      <th className="px-10 py-6 text-[10px] font-black text-gray-600 uppercase tracking-widest">Alumno</th>
+                      <th className="px-10 py-6 text-[10px] font-black text-gray-600 uppercase tracking-widest">Registro</th>
+                      <th className="px-10 py-6 text-[10px] font-black text-gray-600 uppercase tracking-widest">Última Conexión</th>
+                      <th className="px-10 py-6 text-[10px] font-black text-gray-600 uppercase tracking-widest text-right">Status Live</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {students.map((student) => (
+                      <tr key={student.id} className="group hover:bg-white/[0.02] transition-colors">
+                        <td className="px-10 py-8">
+                          <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg border border-white/10 shadow-xl ${isUserOnline(student.id) ? 'bg-red-600 text-white' : 'bg-white/5 text-gray-500'}`}>
+                              {student.fullName.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="font-black text-sm uppercase tracking-tighter text-white">{student.fullName}</p>
+                              <p className="text-[10px] font-bold text-gray-600 flex items-center gap-1.5 mt-0.5"><Mail size={10} className="text-red-600" /> {student.email}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-10 py-8">
+                          <div className="flex items-center gap-2 text-gray-500 text-[11px] font-bold">
+                            <Calendar size={14} className="opacity-40" />
+                            {student.created_at ? new Date(student.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '---'}
+                          </div>
+                        </td>
+                        <td className="px-10 py-8">
+                          <div className="flex items-center gap-2 text-gray-500 text-[11px] font-bold">
+                            <Globe size={14} className="opacity-40" />
+                            {student.last_seen ? new Date(student.last_seen).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : 'Nunca'}
+                          </div>
+                        </td>
+                        <td className="px-10 py-8 text-right">
+                          <div className={`inline-flex items-center gap-3 px-5 py-2 rounded-full border text-[9px] font-black uppercase tracking-widest ${isUserOnline(student.id) ? 'border-green-500/20 bg-green-500/5 text-green-500' : 'border-white/5 bg-white/5 text-gray-700'}`}>
+                            <div className={`w-2 h-2 rounded-full ${isUserOnline(student.id) ? 'bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-gray-800'}`} />
+                            {isUserOnline(student.id) ? 'Online' : 'Offline'}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {students.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-10 py-20 text-center opacity-20">
+                           <UserIcon size={40} className="mx-auto mb-4" />
+                           <p className="text-[10px] font-black uppercase tracking-[0.3em]">No hay alumnos registrados</p>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

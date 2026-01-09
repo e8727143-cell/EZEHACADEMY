@@ -33,4 +33,6 @@ export interface User {
   role: 'admin' | 'student';
   fullName: string;
   progress: string[];
+  last_seen?: string;
+  created_at?: string;
 }

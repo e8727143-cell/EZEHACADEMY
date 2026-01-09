@@ -35,6 +35,49 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Tracking de actividad y Presence API
+  useEffect(() => {
+    if (user) {
+      // 1. Heartbeat Database (Respaldo histórico)
+      const updateActivity = async () => {
+        try {
+          await supabase
+            .from('profiles')
+            .update({ last_seen: new Date().toISOString() })
+            .eq('id', user.id);
+        } catch (e) {
+          console.error("Error updating heartbeat", e);
+        }
+      };
+      updateActivity();
+      const interval = setInterval(updateActivity, 3 * 60 * 1000);
+
+      // 2. Presence API (Tracking en tiempo real instantáneo)
+      const channel = supabase.channel('online-users', {
+        config: {
+          presence: {
+            key: user.id,
+          },
+        },
+      });
+
+      channel
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            await channel.track({
+              user_id: user.id,
+              online_at: new Date().toISOString(),
+            });
+          }
+        });
+
+      return () => {
+        clearInterval(interval);
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [user?.id]);
+
   const mapSupabaseUser = (sbUser: any) => {
     const isAdmin = sbUser.email === ADMIN_EMAIL;
     setUser({
@@ -90,9 +133,10 @@ const App: React.FC = () => {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Login />} />
-        <Route path="/dashboard" element={user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/admin" element={user ? (user.role === 'admin' ? <Admin onLogout={handleLogout} /> : <AccessDenied />) : <Navigate to="/" />} />
+        <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Navigate to="/login" />} />
+        <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
+        <Route path="/dashboard" element={user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} />
+        <Route path="/admin" element={user ? (user.role === 'admin' ? <Admin onLogout={handleLogout} /> : <AccessDenied />) : <Navigate to="/login" />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>

@@ -1,13 +1,14 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, User as UserIcon, ShieldCheck, AlertCircle, Loader2, Youtube } from 'lucide-react';
+import { Mail, Lock, User as UserIcon, ShieldCheck, AlertCircle, Loader2, Youtube, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 const Login: React.FC = () => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -161,20 +162,10 @@ const Login: React.FC = () => {
           animate={{ opacity: 1, x: 0 }}
           className="w-full max-w-md"
         >
-          <div className="mb-12">
-            <motion.div 
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              className="text-5xl font-black tracking-tighter text-red-600 mb-4"
-            >
-              EZEH<span className="text-white">ACADEMY</span>
-            </motion.div>
-            <div className="flex items-center gap-3">
-              <div className="h-1 w-12 bg-red-600" />
-              <p className="text-gray-400 text-sm font-bold uppercase tracking-widest">
-                {isRegistering ? 'Crear nueva cuenta' : 'Acceso Estudiantes'}
-              </p>
-            </div>
+          <div className="mb-16 text-center">
+            <p className="text-gray-400 text-sm font-black uppercase tracking-[0.3em]">
+              {isRegistering ? 'Crear nueva cuenta' : 'Acceso Estudiantes'}
+            </p>
           </div>
 
           <AnimatePresence mode="wait">
@@ -244,14 +235,21 @@ const Login: React.FC = () => {
               <div className="relative group">
                 <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-700 group-focus-within:text-red-600 transition-colors" size={18} />
                 <input 
-                  type="password" 
+                  type={showPassword ? "text" : "password"} 
                   required
                   minLength={6}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-[#0d0d0d] border border-white/5 rounded-2xl px-14 py-5 focus:border-red-600/50 outline-none transition-all text-sm font-bold text-gray-200"
+                  className="w-full bg-[#0d0d0d] border border-white/5 rounded-2xl px-14 pr-16 py-5 focus:border-red-600/50 outline-none transition-all text-sm font-bold text-gray-200"
                   placeholder="••••••••"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-700 hover:text-red-600 transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
 
@@ -281,12 +279,11 @@ const Login: React.FC = () => {
             </button>
           </div>
 
-          <div className="mt-16 pt-8 border-t border-white/5 flex items-center justify-between opacity-50 group">
-            <div className="flex items-center gap-3 text-[9px] text-gray-400 uppercase font-black tracking-[0.2em]">
+          <div className="mt-16 pt-8 border-t border-white/5 flex items-center justify-center opacity-50 group">
+            <div className="flex items-center gap-3 text-[10px] text-gray-400 uppercase font-black tracking-[0.3em]">
               <ShieldCheck size={14} className="text-red-600" /> 
-              Seguridad Biometría
+              100% SEGURO
             </div>
-            <div className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">v2.4.8</div>
           </div>
         </motion.div>
       </div>
