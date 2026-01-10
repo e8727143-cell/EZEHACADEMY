@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, User as UserIcon, ShieldCheck, AlertCircle, Loader2, Youtube, Eye, EyeOff, Play } from 'lucide-react';
+import { Mail, Lock, User as UserIcon, ShieldCheck, AlertCircle, Loader2, Play, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 const Login: React.FC = () => {
@@ -22,27 +22,19 @@ const Login: React.FC = () => {
 
     try {
       if (isRegistering) {
-        const { data, error: signUpError } = await supabase.auth.signUp({
+        // 1. Registro en Supabase Auth
+        // El Trigger SQL configurado en el backend se encargará de crear el registro en 'public.profiles' automáticamente.
+        const { error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: { full_name: name }
+            data: { full_name: name } // Esto se pasa al trigger como raw_user_meta_data
           }
         });
 
         if (signUpError) throw signUpError;
 
-        if (data.user) {
-          // Usar 'student' en lugar de 'user' para consistencia con el sistema
-          const { error: profileError } = await supabase.from('profiles').insert([{ 
-            id: data.user.id, 
-            full_name: name, 
-            role: 'student' 
-          }]);
-          if (profileError) throw profileError;
-        }
-
-        setSuccessMsg('¡Cuenta creada! Revisa tu email para confirmar o intenta iniciar sesión.');
+        setSuccessMsg('¡Cuenta creada! Si recibiste un correo de confirmación, acéptalo antes de entrar.');
         setIsRegistering(false);
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });

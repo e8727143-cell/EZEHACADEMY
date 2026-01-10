@@ -123,7 +123,7 @@ const App: React.FC = () => {
         <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Navigate to="/login" />} />
         <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
         <Route path="/dashboard" element={user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} />
-        <Route path="/admin" element={user ? (user.role === 'admin' ? <Admin onLogout={handleLogout} /> : <AccessDenied />) : <Navigate to="/login" />} />
+        <Route path="/admin" element={user ? (user.role === 'admin' ? <Admin user={user} onLogout={handleLogout} /> : <AccessDenied />) : <Navigate to="/login" />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>
