@@ -1,25 +1,28 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
-  Trash2, LogOut, ChevronDown, Layout, Box, Video, X, Plus, FileText, Link as LinkIcon, Save, PlusCircle, Upload, CheckCircle, Loader2
+  Trash2, LogOut, ChevronDown, Layout, Box, Video, X, Plus, FileText, Link as LinkIcon, Save, PlusCircle, Upload, CheckCircle, Loader2, LayoutDashboard, ArrowLeft, Pencil
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
+import { Link } from 'react-router-dom';
 
 const AdminPage = ({ onLogout }: { onLogout: () => void }) => {
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedCourses, setExpandedCourses] = useState<Set<string>>(new Set());
   
-  // ESTADOS MODALES
+  // ESTADOS MODALES Y EDICIÓN
   const [modalType, setModalType] = useState<'NONE' | 'COURSE' | 'MODULE' | 'LESSON'>('NONE');
-  const [tempId, setTempId] = useState<string>(''); 
+  const [isEditing, setIsEditing] = useState(false); // Nuevo estado para saber si editamos
+  const [tempId, setTempId] = useState<string>(''); // Sirve como ParentID (al crear) o TargetID (al editar)
   const [inputTitle, setInputTitle] = useState('');
   
   // DATOS LECCIÓN + ESTADO DE SUBIDA
   const [lessonData, setLessonData] = useState({ 
     title: '', video_url: '', description: '', resources: '' 
   });
-  const [uploading, setUploading] = useState(false); // Estado para el spinner de carga
+  const [uploading, setUploading] = useState(false);
 
   const [notification, setNotification] = useState<{type: 'success' | 'error', msg: string} | null>(null);
 
@@ -55,76 +58,146 @@ const AdminPage = ({ onLogout }: { onLogout: () => void }) => {
     const fileName = `${Math.random()}.${fileExt}`;
     const filePath = `${fileName}`;
 
-    setUploading(true); // Activar spinner
+    setUploading(true);
 
     try {
-      // 1. Subir al Bucket 'course_materials'
       const { error: uploadError } = await supabase.storage
         .from('course_materials')
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
-      // 2. Obtener URL Pública
       const { data } = supabase.storage.from('course_materials').getPublicUrl(filePath);
       
-      // 3. Guardar URL en el estado (sin borrar lo anterior si quisieras multiples, pero aqui reemplaza)
       setLessonData(prev => ({ ...prev, resources: data.publicUrl }));
       showNotify('success', 'ARCHIVO SUBIDO CORRECTAMENTE');
 
     } catch (error: any) {
       alert("Error subiendo archivo: " + error.message);
     } finally {
-      setUploading(false); // Apagar spinner
+      setUploading(false);
     }
   };
 
-  // --- APERTURA MODALES ---
-  const openCreateCourse = () => { setModalType('COURSE'); setInputTitle(''); };
-  const openCreateModule = (courseId: string) => { setTempId(courseId); setModalType('MODULE'); setInputTitle(''); };
+  // --- APERTURA MODALES (CREAR VS EDITAR) ---
+  
+  // 1. CURSOS
+  const openCreateCourse = () => { 
+    setModalType('COURSE'); 
+    setIsEditing(false); 
+    setInputTitle(''); 
+  };
+  const openEditCourse = (course: any) => {
+    setModalType('COURSE');
+    setIsEditing(true);
+    setTempId(course.id);
+    setInputTitle(course.title);
+  };
+
+  // 2. MÓDULOS
+  const openCreateModule = (courseId: string) => { 
+    setTempId(courseId); // Parent ID
+    setModalType('MODULE'); 
+    setIsEditing(false); 
+    setInputTitle(''); 
+  };
+  const openEditModule = (module: any) => {
+    setTempId(module.id); // Target ID
+    setModalType('MODULE');
+    setIsEditing(true);
+    setInputTitle(module.title);
+  };
+
+  // 3. LECCIONES
   const openCreateLesson = (moduleId: string) => {
-    setTempId(moduleId);
+    setTempId(moduleId); // Parent ID
     setModalType('LESSON');
+    setIsEditing(false);
     setLessonData({ title: '', video_url: '', description: '', resources: '' });
   };
+  const openEditLesson = (lesson: any) => {
+    setTempId(lesson.id); // Target ID
+    setModalType('LESSON');
+    setIsEditing(true);
+    setLessonData({ 
+        title: lesson.title, 
+        video_url: lesson.video_url || '', 
+        description: lesson.description || '', 
+        resources: lesson.resources || '' 
+    });
+  };
+
   const closeModal = () => { setModalType('NONE'); setTempId(''); setInputTitle(''); };
 
-  // --- SUBMITS ---
-  const submitCreateCourse = async () => {
+  // --- SUBMITS (INSERT VS UPDATE) ---
+  
+  const submitCourse = async () => {
     if (!inputTitle.trim()) return;
-    const { error } = await supabase.from('courses').insert([{ title: inputTitle }]);
-    if (!error) { closeModal(); fetchData(); showNotify('success', 'MASTER CREADO'); } 
+    
+    let error;
+    if (isEditing) {
+        // UPDATE
+        const { error: err } = await supabase.from('courses').update({ title: inputTitle }).eq('id', tempId);
+        error = err;
+    } else {
+        // INSERT
+        const { error: err } = await supabase.from('courses').insert([{ title: inputTitle }]);
+        error = err;
+    }
+
+    if (!error) { closeModal(); fetchData(); showNotify('success', isEditing ? 'MASTER ACTUALIZADO' : 'MASTER CREADO'); } 
     else alert(error.message);
   };
 
-  const submitCreateModule = async () => {
+  const submitModule = async () => {
     if (!inputTitle.trim()) return;
-    const { error } = await supabase.from('modules').insert([{ title: inputTitle, course_id: tempId }]);
-    if (!error) { closeModal(); fetchData(); showNotify('success', 'MÓDULO CREADO'); }
+
+    let error;
+    if (isEditing) {
+        // UPDATE
+        const { error: err } = await supabase.from('modules').update({ title: inputTitle }).eq('id', tempId);
+        error = err;
+    } else {
+        // INSERT (tempId es course_id)
+        const { error: err } = await supabase.from('modules').insert([{ title: inputTitle, course_id: tempId }]);
+        error = err;
+    }
+
+    if (!error) { closeModal(); fetchData(); showNotify('success', isEditing ? 'MÓDULO ACTUALIZADO' : 'MÓDULO CREADO'); }
     else alert(error.message);
   };
 
-  const submitCreateLesson = async () => {
+  const submitLesson = async () => {
     if (!lessonData.title.trim()) return alert("Título obligatorio");
-    const { error } = await supabase.from('lessons').insert([{ 
-      title: lessonData.title, 
-      module_id: tempId,
-      video_url: lessonData.video_url,
-      description: lessonData.description,
-      resources: lessonData.resources // Aquí va la URL del archivo subido
-    }]);
 
-    if (!error) { closeModal(); fetchData(); showNotify('success', 'CLASE GUARDADA'); }
+    let error;
+    const payload = { 
+        title: lessonData.title, 
+        video_url: lessonData.video_url,
+        description: lessonData.description,
+        resources: lessonData.resources 
+    };
+
+    if (isEditing) {
+        // UPDATE
+        const { error: err } = await supabase.from('lessons').update(payload).eq('id', tempId);
+        error = err;
+    } else {
+        // INSERT (tempId es module_id)
+        const { error: err } = await supabase.from('lessons').insert([{ ...payload, module_id: tempId }]);
+        error = err;
+    }
+
+    if (!error) { closeModal(); fetchData(); showNotify('success', isEditing ? 'CLASE ACTUALIZADA' : 'CLASE GUARDADA'); }
     else alert(error.message);
   };
 
   const handleDelete = async (table: 'courses'|'modules'|'lessons', id: string) => {
-    if (!window.confirm("¿Eliminar elemento?")) return;
+    if (!window.confirm("¿Estás seguro de eliminar este elemento permanentemente?")) return;
     const { error } = await supabase.from(table).delete().eq('id', id);
     if (!error) {
-      if (table === 'courses') setCourses(prev => prev.filter(c => c.id !== id));
-      else fetchData();
-      showNotify('success', 'ELIMINADO');
+      fetchData();
+      showNotify('success', 'ELIMINADO CORRECTAMENTE');
     } else alert(error.message);
   };
 
@@ -155,7 +228,20 @@ const AdminPage = ({ onLogout }: { onLogout: () => void }) => {
       <div className="max-w-6xl mx-auto pb-40">
         <nav className="flex justify-between items-center mb-10 border-b border-white/5 pb-6">
             <h1 className="text-3xl font-black italic tracking-tighter">EZEH <span className="text-red-600">ADMIN</span></h1>
-            <button onClick={onLogout} className="text-zinc-600 hover:text-white transition-colors"><LogOut/></button>
+            
+            <div className="flex items-center gap-4">
+                <Link to="/dashboard" className="flex items-center gap-2 px-6 py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-red-600/50 transition-all text-[10px] font-black uppercase tracking-widest text-zinc-300 hover:text-white group">
+                    <LayoutDashboard size={14} className="text-zinc-500 group-hover:text-red-600 transition-colors"/>
+                    Volver a Academia
+                </Link>
+
+                <div className="w-px h-8 bg-white/10 mx-2 hidden sm:block"></div>
+
+                <button onClick={onLogout} className="flex items-center gap-2 px-4 py-3 rounded-xl bg-zinc-900/50 border border-transparent hover:border-white/10 hover:bg-zinc-800 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-all">
+                    <LogOut size={14}/>
+                    <span className="hidden sm:inline">Salir</span>
+                </button>
+            </div>
         </nav>
 
         <div className="mb-10 text-right">
@@ -173,7 +259,10 @@ const AdminPage = ({ onLogout }: { onLogout: () => void }) => {
                         {expandedCourses.has(course.id) ? <ChevronDown/> : <Layout/>}
                     </div>
                     <div>
-                        <h3 className="font-black text-xl uppercase italic group-hover:text-red-500 transition-colors tracking-tight">{course.title}</h3>
+                        <div className="flex items-center gap-3">
+                            <h3 className="font-black text-xl uppercase italic group-hover:text-red-500 transition-colors tracking-tight">{course.title}</h3>
+                            <button onClick={(e) => { e.stopPropagation(); openEditCourse(course); }} className="text-zinc-600 hover:text-white transition-colors p-1"><Pencil size={14}/></button>
+                        </div>
                         <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">{course.modules?.length || 0} Módulos</p>
                     </div>
                 </div>
@@ -193,6 +282,7 @@ const AdminPage = ({ onLogout }: { onLogout: () => void }) => {
                                 <div className="flex items-center gap-4">
                                     <Box size={18} className="text-zinc-500"/>
                                     <span className="font-black text-sm text-zinc-300 uppercase tracking-wide">{mod.title}</span>
+                                    <button onClick={() => openEditModule(mod)} className="text-zinc-600 hover:text-white transition-colors"><Pencil size={12}/></button>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <button onClick={() => openCreateLesson(mod.id)} className="text-[9px] bg-red-600/10 text-red-500 px-4 py-2 rounded-lg border border-red-600/20 hover:bg-red-600 hover:text-white transition-all font-black uppercase flex items-center gap-2"><Plus size={10}/> Clase</button>
@@ -205,7 +295,10 @@ const AdminPage = ({ onLogout }: { onLogout: () => void }) => {
                                         <div className="flex items-center gap-4">
                                             <div className="p-2 bg-zinc-900 rounded-lg text-zinc-600 group-hover:text-red-500 transition-colors"><Video size={14}/></div>
                                             <div>
-                                                <span className="text-xs font-bold text-zinc-400 group-hover:text-white uppercase block transition-colors">{l.title}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-bold text-zinc-400 group-hover:text-white uppercase block transition-colors">{l.title}</span>
+                                                    <button onClick={() => openEditLesson(l)} className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-white transition-all"><Pencil size={10}/></button>
+                                                </div>
                                                 {l.resources && <span className="text-[9px] text-green-500 flex items-center gap-1 mt-1"><FileText size={8}/> Archivo Adjunto</span>}
                                             </div>
                                         </div>
@@ -226,37 +319,37 @@ const AdminPage = ({ onLogout }: { onLogout: () => void }) => {
         </div>
       </div>
 
-      {/* --- MODAL CREAR CURSO --- */}
+      {/* --- MODAL CREAR/EDITAR CURSO --- */}
       {modalType === 'COURSE' && (
         <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-6">
             <div className="bg-[#0f0f0f] p-10 rounded-[3rem] w-full max-w-lg border border-white/10 relative shadow-2xl">
                 <button onClick={closeModal} className="absolute top-8 right-8 text-zinc-500 hover:text-white transition-colors"><X/></button>
-                <h2 className="text-3xl font-black italic uppercase mb-8">Nuevo <span className="text-red-600">Master</span></h2>
-                <input autoFocus type="text" onChange={e => setInputTitle(e.target.value)} className="w-full bg-black border border-white/10 p-6 rounded-2xl text-white font-bold outline-none focus:border-red-600 mb-6 placeholder:text-zinc-800 transition-colors" placeholder="NOMBRE DEL MASTER..."/>
-                <button onClick={submitCreateCourse} className="w-full bg-red-600 py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-red-700 transition-all">Crear Estructura</button>
+                <h2 className="text-3xl font-black italic uppercase mb-8">{isEditing ? 'Editar' : 'Nuevo'} <span className="text-red-600">Master</span></h2>
+                <input autoFocus type="text" value={inputTitle} onChange={e => setInputTitle(e.target.value)} className="w-full bg-black border border-white/10 p-6 rounded-2xl text-white font-bold outline-none focus:border-red-600 mb-6 placeholder:text-zinc-800 transition-colors" placeholder="NOMBRE DEL MASTER..."/>
+                <button onClick={submitCourse} className="w-full bg-red-600 py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-red-700 transition-all">{isEditing ? 'Guardar Cambios' : 'Crear Estructura'}</button>
             </div>
         </div>
       )}
 
-      {/* --- MODAL CREAR MÓDULO --- */}
+      {/* --- MODAL CREAR/EDITAR MÓDULO --- */}
       {modalType === 'MODULE' && (
         <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-6">
             <div className="bg-[#0f0f0f] p-10 rounded-[3rem] w-full max-w-lg border border-white/10 relative shadow-2xl">
                 <button onClick={closeModal} className="absolute top-8 right-8 text-zinc-500 hover:text-white transition-colors"><X/></button>
-                <h2 className="text-2xl font-black italic uppercase mb-8 flex items-center gap-3"><Box className="text-red-600"/> Nuevo Módulo</h2>
-                <input autoFocus type="text" onChange={e => setInputTitle(e.target.value)} className="w-full bg-black border border-white/10 p-6 rounded-2xl text-white font-bold outline-none focus:border-red-600 mb-6 placeholder:text-zinc-800 transition-colors" placeholder="NOMBRE DEL MÓDULO..."/>
-                <button onClick={submitCreateModule} className="w-full bg-white text-black py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-zinc-200 transition-all">Añadir Módulo</button>
+                <h2 className="text-2xl font-black italic uppercase mb-8 flex items-center gap-3"><Box className="text-red-600"/> {isEditing ? 'Editar' : 'Nuevo'} Módulo</h2>
+                <input autoFocus type="text" value={inputTitle} onChange={e => setInputTitle(e.target.value)} className="w-full bg-black border border-white/10 p-6 rounded-2xl text-white font-bold outline-none focus:border-red-600 mb-6 placeholder:text-zinc-800 transition-colors" placeholder="NOMBRE DEL MÓDULO..."/>
+                <button onClick={submitModule} className="w-full bg-white text-black py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-zinc-200 transition-all">{isEditing ? 'Guardar Cambios' : 'Añadir Módulo'}</button>
             </div>
         </div>
       )}
 
-      {/* --- MODAL CREAR CLASE (CON UPLOADER) --- */}
+      {/* --- MODAL CREAR/EDITAR CLASE --- */}
       {modalType === 'LESSON' && (
         <div className="fixed inset-0 z-[150] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4">
             <div className="bg-[#0f0f0f] w-full max-w-2xl rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
                 <div className="p-8 border-b border-white/5 flex justify-between items-center bg-zinc-900/30">
                     <h2 className="text-2xl font-black uppercase italic flex items-center gap-3 text-white">
-                        <Video className="text-red-600"/> Nueva <span className="text-red-600">Lección</span>
+                        <Video className="text-red-600"/> {isEditing ? 'Editar' : 'Nueva'} <span className="text-red-600">Lección</span>
                     </h2>
                     <button onClick={closeModal} className="p-2 bg-white/5 rounded-full hover:bg-red-600 hover:text-white transition-all"><X size={20}/></button>
                 </div>
@@ -314,8 +407,8 @@ const AdminPage = ({ onLogout }: { onLogout: () => void }) => {
 
                 </div>
                 <div className="p-8 pt-0 bg-gradient-to-t from-[#0f0f0f] to-transparent">
-                    <button onClick={submitCreateLesson} disabled={uploading} className={`w-full bg-red-600 py-5 rounded-2xl font-black uppercase tracking-[0.2em] hover:bg-red-700 transition-all shadow-lg shadow-red-900/20 flex items-center justify-center gap-3 active:scale-95 text-white ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                        <Save size={20}/> Guardar Lección
+                    <button onClick={submitLesson} disabled={uploading} className={`w-full bg-red-600 py-5 rounded-2xl font-black uppercase tracking-[0.2em] hover:bg-red-700 transition-all shadow-lg shadow-red-900/20 flex items-center justify-center gap-3 active:scale-95 text-white ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                        <Save size={20}/> {isEditing ? 'Guardar Cambios' : 'Guardar Lección'}
                     </button>
                 </div>
             </div>
