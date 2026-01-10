@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Trash2, LogOut, ChevronDown, Layout, Box, Video, X, Plus, FileText, Link as LinkIcon, Save, PlusCircle
+  Trash2, LogOut, ChevronDown, Layout, Box, Video, X, Plus, FileText, Link as LinkIcon, Save, PlusCircle, Upload, CheckCircle, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
@@ -10,17 +10,16 @@ const AdminPage = ({ onLogout }: { onLogout: () => void }) => {
   const [loading, setLoading] = useState(true);
   const [expandedCourses, setExpandedCourses] = useState<Set<string>>(new Set());
   
-  // --- ESTADOS DE LOS MODALES (VENTANAS EMERGENTES) ---
+  // ESTADOS MODALES
   const [modalType, setModalType] = useState<'NONE' | 'COURSE' | 'MODULE' | 'LESSON'>('NONE');
+  const [tempId, setTempId] = useState<string>(''); 
+  const [inputTitle, setInputTitle] = useState('');
   
-  // Datos temporales para crear cosas
-  const [tempId, setTempId] = useState<string>(''); // Guarda el ID del padre (Curso o Módulo)
-  const [inputTitle, setInputTitle] = useState(''); // Para títulos simples
-  
-  // Datos complejos para la Lección
+  // DATOS LECCIÓN + ESTADO DE SUBIDA
   const [lessonData, setLessonData] = useState({ 
     title: '', video_url: '', description: '', resources: '' 
   });
+  const [uploading, setUploading] = useState(false); // Estado para el spinner de carga
 
   const [notification, setNotification] = useState<{type: 'success' | 'error', msg: string} | null>(null);
 
@@ -47,78 +46,85 @@ const AdminPage = ({ onLogout }: { onLogout: () => void }) => {
     setLoading(false);
   }
 
-  // --- APERTURA DE MODALES (SIN PROMPTS) ---
+  // --- FUNCIÓN DE SUBIDA DE ARCHIVOS (CORE) ---
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
 
-  const openCreateCourse = () => {
-    setModalType('COURSE');
-    setInputTitle('');
+    const file = e.target.files[0];
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random()}.${fileExt}`;
+    const filePath = `${fileName}`;
+
+    setUploading(true); // Activar spinner
+
+    try {
+      // 1. Subir al Bucket 'course_materials'
+      const { error: uploadError } = await supabase.storage
+        .from('course_materials')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // 2. Obtener URL Pública
+      const { data } = supabase.storage.from('course_materials').getPublicUrl(filePath);
+      
+      // 3. Guardar URL en el estado (sin borrar lo anterior si quisieras multiples, pero aqui reemplaza)
+      setLessonData(prev => ({ ...prev, resources: data.publicUrl }));
+      showNotify('success', 'ARCHIVO SUBIDO CORRECTAMENTE');
+
+    } catch (error: any) {
+      alert("Error subiendo archivo: " + error.message);
+    } finally {
+      setUploading(false); // Apagar spinner
+    }
   };
 
-  const openCreateModule = (courseId: string) => {
-    setTempId(courseId);
-    setModalType('MODULE');
-    setInputTitle('');
-  };
-
+  // --- APERTURA MODALES ---
+  const openCreateCourse = () => { setModalType('COURSE'); setInputTitle(''); };
+  const openCreateModule = (courseId: string) => { setTempId(courseId); setModalType('MODULE'); setInputTitle(''); };
   const openCreateLesson = (moduleId: string) => {
     setTempId(moduleId);
     setModalType('LESSON');
     setLessonData({ title: '', video_url: '', description: '', resources: '' });
   };
+  const closeModal = () => { setModalType('NONE'); setTempId(''); setInputTitle(''); };
 
-  const closeModal = () => {
-    setModalType('NONE');
-    setTempId('');
-    setInputTitle('');
-  };
-
-  // --- EJECUCIÓN DE ACCIONES (SUBMIT) ---
-
+  // --- SUBMITS ---
   const submitCreateCourse = async () => {
     if (!inputTitle.trim()) return;
     const { error } = await supabase.from('courses').insert([{ title: inputTitle }]);
-    if (!error) {
-      closeModal();
-      fetchData();
-      showNotify('success', 'MASTER CREADO');
-    } else alert(error.message);
+    if (!error) { closeModal(); fetchData(); showNotify('success', 'MASTER CREADO'); } 
+    else alert(error.message);
   };
 
   const submitCreateModule = async () => {
     if (!inputTitle.trim()) return;
     const { error } = await supabase.from('modules').insert([{ title: inputTitle, course_id: tempId }]);
-    if (!error) {
-      closeModal();
-      fetchData();
-      showNotify('success', 'MÓDULO CREADO');
-    } else alert(error.message);
+    if (!error) { closeModal(); fetchData(); showNotify('success', 'MÓDULO CREADO'); }
+    else alert(error.message);
   };
 
   const submitCreateLesson = async () => {
-    if (!lessonData.title.trim()) return alert("El título es obligatorio");
+    if (!lessonData.title.trim()) return alert("Título obligatorio");
     const { error } = await supabase.from('lessons').insert([{ 
       title: lessonData.title, 
       module_id: tempId,
       video_url: lessonData.video_url,
       description: lessonData.description,
-      resources: lessonData.resources
+      resources: lessonData.resources // Aquí va la URL del archivo subido
     }]);
 
-    if (!error) {
-      closeModal();
-      fetchData();
-      showNotify('success', 'CLASE GUARDADA');
-    } else alert(error.message);
+    if (!error) { closeModal(); fetchData(); showNotify('success', 'CLASE GUARDADA'); }
+    else alert(error.message);
   };
 
-  // --- ACCIONES DE BORRADO ---
   const handleDelete = async (table: 'courses'|'modules'|'lessons', id: string) => {
-    if (!window.confirm("¿Estás seguro de eliminar esto?")) return;
+    if (!window.confirm("¿Eliminar elemento?")) return;
     const { error } = await supabase.from(table).delete().eq('id', id);
     if (!error) {
       if (table === 'courses') setCourses(prev => prev.filter(c => c.id !== id));
       else fetchData();
-      showNotify('success', 'ELIMINADO CORRECTAMENTE');
+      showNotify('success', 'ELIMINADO');
     } else alert(error.message);
   };
 
@@ -161,70 +167,46 @@ const AdminPage = ({ onLogout }: { onLogout: () => void }) => {
         <div className="space-y-8">
           {courses.map((course) => (
             <div key={course.id} className="bg-[#0a0a0a] border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl relative">
-              
-              {/* CABECERA CURSO */}
               <div className="p-8 flex items-center justify-between hover:bg-white/[0.01] transition-colors">
-                <div 
-                  className="flex items-center gap-6 cursor-pointer group select-none flex-1"
-                  onClick={() => toggleCourse(course.id)}
-                >
+                <div className="flex items-center gap-6 cursor-pointer group select-none flex-1" onClick={() => toggleCourse(course.id)}>
                     <div className="w-14 h-14 bg-red-600/10 rounded-2xl flex items-center justify-center text-red-600 group-hover:bg-red-600 group-hover:text-white transition-all border border-red-600/10">
                         {expandedCourses.has(course.id) ? <ChevronDown/> : <Layout/>}
                     </div>
                     <div>
                         <h3 className="font-black text-xl uppercase italic group-hover:text-red-500 transition-colors tracking-tight">{course.title}</h3>
-                        <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">
-                           {course.modules?.length || 0} Módulos
-                        </p>
+                        <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">{course.modules?.length || 0} Módulos</p>
                     </div>
                 </div>
-                
                 <div className="flex items-center gap-3 pl-6 border-l border-white/5">
-                  <button type="button" onClick={() => openCreateModule(course.id)} className="bg-white text-black px-5 py-2.5 rounded-xl font-black text-[10px] uppercase hover:bg-zinc-200 transition-all shadow-lg active:scale-95 tracking-wide">
-                    + Módulo
-                  </button>
-                  <button type="button" onClick={() => handleDelete('courses', course.id)} className="p-3 text-zinc-600 hover:text-red-500 bg-zinc-900 rounded-xl border border-white/5 hover:border-red-600/50 transition-all active:scale-95">
-                    <Trash2 size={18}/>
-                  </button>
+                  <button onClick={() => openCreateModule(course.id)} className="bg-white text-black px-5 py-2.5 rounded-xl font-black text-[10px] uppercase hover:bg-zinc-200 transition-all shadow-lg active:scale-95">+ Módulo</button>
+                  <button onClick={() => handleDelete('courses', course.id)} className="p-3 text-zinc-600 hover:text-red-500 bg-zinc-900 rounded-xl border border-white/5 hover:border-red-600/50 transition-all active:scale-95"><Trash2 size={18}/></button>
                 </div>
               </div>
 
-              {/* LISTA DE MÓDULOS */}
               <AnimatePresence>
                 {expandedCourses.has(course.id) && (
                   <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden bg-zinc-900/20 border-t border-white/5">
                     <div className="p-8 space-y-4">
                       {course.modules?.map((mod: any) => (
                          <div key={mod.id} className="bg-black border border-white/5 rounded-3xl overflow-hidden">
-                            {/* CABECERA MÓDULO */}
                             <div className="p-5 flex justify-between items-center bg-white/[0.02] border-b border-white/5">
                                 <div className="flex items-center gap-4">
                                     <Box size={18} className="text-zinc-500"/>
                                     <span className="font-black text-sm text-zinc-300 uppercase tracking-wide">{mod.title}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <button 
-                                        type="button"
-                                        onClick={() => openCreateLesson(mod.id)} 
-                                        className="text-[9px] bg-red-600/10 text-red-500 px-4 py-2 rounded-lg border border-red-600/20 hover:bg-red-600 hover:text-white transition-all font-black uppercase flex items-center gap-2"
-                                    >
-                                        <Plus size={10}/> Clase
-                                    </button>
+                                    <button onClick={() => openCreateLesson(mod.id)} className="text-[9px] bg-red-600/10 text-red-500 px-4 py-2 rounded-lg border border-red-600/20 hover:bg-red-600 hover:text-white transition-all font-black uppercase flex items-center gap-2"><Plus size={10}/> Clase</button>
                                     <button onClick={() => handleDelete('modules', mod.id)} className="text-zinc-600 hover:text-red-500 p-2 transition-colors"><Trash2 size={16}/></button>
                                 </div>
                             </div>
-
-                            {/* LISTA DE CLASES */}
                             <div className="p-2 bg-[#050505]">
                                 {mod.lessons?.map((l: any) => (
                                     <div key={l.id} className="flex items-center justify-between p-4 rounded-2xl hover:bg-white/5 transition-all group border border-transparent hover:border-white/5">
                                         <div className="flex items-center gap-4">
-                                            <div className="p-2 bg-zinc-900 rounded-lg text-zinc-600 group-hover:text-red-500 transition-colors">
-                                                <Video size={14}/>
-                                            </div>
+                                            <div className="p-2 bg-zinc-900 rounded-lg text-zinc-600 group-hover:text-red-500 transition-colors"><Video size={14}/></div>
                                             <div>
                                                 <span className="text-xs font-bold text-zinc-400 group-hover:text-white uppercase block transition-colors">{l.title}</span>
-                                                {l.video_url && <span className="text-[9px] text-zinc-600 flex items-center gap-1 mt-1"><LinkIcon size={8}/> Video Adjunto</span>}
+                                                {l.resources && <span className="text-[9px] text-green-500 flex items-center gap-1 mt-1"><FileText size={8}/> Archivo Adjunto</span>}
                                             </div>
                                         </div>
                                         <button onClick={() => handleDelete('lessons', l.id)} className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-500 p-2 transition-all"><Trash2 size={14}/></button>
@@ -244,9 +226,7 @@ const AdminPage = ({ onLogout }: { onLogout: () => void }) => {
         </div>
       </div>
 
-      {/* ================= MODALES ================= */}
-
-      {/* 1. MODAL CREAR CURSO */}
+      {/* --- MODAL CREAR CURSO --- */}
       {modalType === 'COURSE' && (
         <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-6">
             <div className="bg-[#0f0f0f] p-10 rounded-[3rem] w-full max-w-lg border border-white/10 relative shadow-2xl">
@@ -258,7 +238,7 @@ const AdminPage = ({ onLogout }: { onLogout: () => void }) => {
         </div>
       )}
 
-      {/* 2. MODAL CREAR MÓDULO */}
+      {/* --- MODAL CREAR MÓDULO --- */}
       {modalType === 'MODULE' && (
         <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-6">
             <div className="bg-[#0f0f0f] p-10 rounded-[3rem] w-full max-w-lg border border-white/10 relative shadow-2xl">
@@ -270,7 +250,7 @@ const AdminPage = ({ onLogout }: { onLogout: () => void }) => {
         </div>
       )}
 
-      {/* 3. MODAL CREAR CLASE (EDITOR) */}
+      {/* --- MODAL CREAR CLASE (CON UPLOADER) --- */}
       {modalType === 'LESSON' && (
         <div className="fixed inset-0 z-[150] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4">
             <div className="bg-[#0f0f0f] w-full max-w-2xl rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
@@ -281,10 +261,12 @@ const AdminPage = ({ onLogout }: { onLogout: () => void }) => {
                     <button onClick={closeModal} className="p-2 bg-white/5 rounded-full hover:bg-red-600 hover:text-white transition-all"><X size={20}/></button>
                 </div>
                 <div className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
+                    {/* TÍTULO */}
                     <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Título</label>
                         <input autoFocus type="text" value={lessonData.title} onChange={e => setLessonData({...lessonData, title: e.target.value})} className="w-full bg-black border border-white/10 p-4 rounded-xl text-white font-bold focus:border-red-600 outline-none transition-all placeholder:text-zinc-800" placeholder="Ej: Estrategia de Ventas..."/>
                     </div>
+                    {/* VIDEO */}
                     <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Video URL (Drive/YouTube)</label>
                         <div className="relative">
@@ -292,20 +274,47 @@ const AdminPage = ({ onLogout }: { onLogout: () => void }) => {
                             <input type="text" value={lessonData.video_url} onChange={e => setLessonData({...lessonData, video_url: e.target.value})} className="w-full bg-black border border-white/10 p-4 pl-12 rounded-xl text-zinc-300 focus:border-red-600 outline-none transition-all font-mono text-sm" placeholder="https://..."/>
                         </div>
                     </div>
+                    {/* DESCRIPCIÓN */}
                     <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Descripción</label>
                         <textarea value={lessonData.description} onChange={e => setLessonData({...lessonData, description: e.target.value})} className="w-full bg-black border border-white/10 p-4 rounded-xl text-zinc-400 focus:border-red-600 outline-none transition-all min-h-[100px] resize-none" placeholder="Resumen..."/>
                     </div>
+                    
+                    {/* --- ZONA DE CARGA DE ARCHIVOS --- */}
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Recursos (Links)</label>
-                        <div className="relative">
-                            <FileText size={16} className="absolute left-4 top-4 text-zinc-600"/>
-                            <textarea value={lessonData.resources} onChange={e => setLessonData({...lessonData, resources: e.target.value})} className="w-full bg-black border border-white/10 p-4 pl-12 rounded-xl text-zinc-400 focus:border-red-600 outline-none transition-all min-h-[80px]" placeholder="Pegar enlaces aquí..."/>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Materiales / Archivos</label>
+                        <div className="w-full bg-black border-2 border-dashed border-white/10 rounded-xl p-8 flex flex-col items-center justify-center gap-3 hover:border-red-600/50 transition-colors relative">
+                            {uploading ? (
+                                <div className="flex flex-col items-center text-red-600 animate-pulse">
+                                    <Loader2 className="animate-spin" size={32}/>
+                                    <span className="text-xs font-black uppercase mt-2">Subiendo...</span>
+                                </div>
+                            ) : lessonData.resources ? (
+                                <div className="flex items-center gap-3 text-green-500">
+                                    <CheckCircle size={32}/>
+                                    <div className="text-left">
+                                        <p className="text-xs font-black uppercase">Archivo cargado con éxito</p>
+                                        <p className="text-[10px] text-zinc-500 truncate max-w-[200px]">{lessonData.resources}</p>
+                                    </div>
+                                    <button onClick={() => setLessonData(prev => ({...prev, resources: ''}))} className="p-2 bg-white/5 rounded-full hover:bg-red-600 hover:text-white ml-4"><Trash2 size={14}/></button>
+                                </div>
+                            ) : (
+                                <>
+                                    <Upload size={32} className="text-zinc-700"/>
+                                    <p className="text-xs font-black uppercase text-zinc-500">Arrastra o selecciona un archivo</p>
+                                    <input 
+                                        type="file" 
+                                        onChange={handleFileUpload}
+                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                    />
+                                </>
+                            )}
                         </div>
                     </div>
+
                 </div>
                 <div className="p-8 pt-0 bg-gradient-to-t from-[#0f0f0f] to-transparent">
-                    <button onClick={submitCreateLesson} className="w-full bg-red-600 py-5 rounded-2xl font-black uppercase tracking-[0.2em] hover:bg-red-700 transition-all shadow-lg shadow-red-900/20 flex items-center justify-center gap-3 active:scale-95 text-white">
+                    <button onClick={submitCreateLesson} disabled={uploading} className={`w-full bg-red-600 py-5 rounded-2xl font-black uppercase tracking-[0.2em] hover:bg-red-700 transition-all shadow-lg shadow-red-900/20 flex items-center justify-center gap-3 active:scale-95 text-white ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                         <Save size={20}/> Guardar Lección
                     </button>
                 </div>
