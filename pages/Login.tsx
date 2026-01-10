@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, User as UserIcon, ShieldCheck, AlertCircle, Loader2, Youtube, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, User as UserIcon, ShieldCheck, AlertCircle, Loader2, Youtube, Eye, EyeOff, Play } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 const Login: React.FC = () => {
@@ -65,8 +65,10 @@ const Login: React.FC = () => {
       
       {/* SECCIÓN IZQUIERDA: ANIMACIÓN 3D & VISUALS */}
       <div className="hidden lg:flex flex-1 relative flex-col items-center justify-center overflow-hidden border-r border-white/5">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-red-600/20 blur-[160px] rounded-full animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-red-900/10 blur-[120px] rounded-full" />
+        
+        {/* LUZ DE FONDO ROJA (MANTENIDA) */}
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-red-600/30 blur-[160px] rounded-full animate-pulse" />
+        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-red-900/20 blur-[120px] rounded-full" />
         
         <motion.div 
           style={{ perspective: 1200 }}
@@ -77,46 +79,73 @@ const Login: React.FC = () => {
         >
           <motion.div
             animate={{ 
-              rotateY: [0, 15, -15, 0],
+              rotateY: [0, 10, -10, 0],
               rotateX: [0, 5, -5, 0],
-              y: [-15, 15, -15]
+              y: [-10, 10, -10]
             }}
             transition={{ 
-              duration: 10, 
+              duration: 8, 
               repeat: Infinity, 
               ease: "easeInOut" 
             }}
             className="relative mb-20"
           >
-            <div className="absolute inset-0 bg-red-600 blur-[80px] opacity-20 scale-150" />
-            <div className="relative bg-gradient-to-br from-red-600 to-red-900 p-10 rounded-[3rem] shadow-[0_0_120px_rgba(220,38,38,0.4)] border border-white/20">
-              <Youtube size={140} color="white" strokeWidth={1.2} />
+            {/* GLOW ROJO DETRÁS DEL OBJETO */}
+            <div className="absolute inset-0 bg-red-600 blur-[90px] opacity-40 scale-125 animate-pulse" />
+            
+            {/* --- BLOQUE DE ORO (ESTILO YOUTUBE PLAY BUTTON) --- */}
+            <div className="relative w-56 h-40 bg-gradient-to-br from-[#fff7ad] via-[#ffa900] to-[#b45309] rounded-[2.5rem] shadow-[0_30px_60px_rgba(0,0,0,0.6),inset_0_2px_4px_rgba(255,255,255,0.8),inset_0_-4px_8px_rgba(180,83,9,0.5)] border-t border-white/40 border-b border-[#78350f] flex items-center justify-center overflow-hidden group">
+              
+              {/* Reflejo metálico superior */}
+              <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent pointer-events-none" />
+              
+              {/* Brillo dinámico (Shimmer) */}
+              <div className="absolute -inset-full top-0 block h-full w-full -skew-x-12 bg-gradient-to-r from-transparent via-white/50 to-transparent opacity-30 animate-[shimmer_3s_infinite]" />
+
+              {/* Triángulo PLAY (Hundido/Grabado en el oro) */}
+              <div className="relative z-20 ml-2 drop-shadow-[0_2px_2px_rgba(255,255,255,0.5)]">
+                 <Play 
+                    size={80} 
+                    fill="#78350f" // Color Bronce Oscuro para el relleno
+                    strokeWidth={0}
+                    className="filter drop-shadow-[inset_2px_2px_4px_rgba(0,0,0,0.4)]"
+                 />
+                 {/* Capa extra para dar profundidad al icono */}
+                 <Play 
+                    size={80} 
+                    fill="url(#goldGradient)"
+                    strokeWidth={0}
+                    className="absolute inset-0 opacity-80 mix-blend-overlay"
+                 />
+              </div>
+
             </div>
 
-            {[...Array(8)].map((_, i) => (
+            {/* PARTÍCULAS DORADAS FLOTANTES */}
+            {[...Array(6)].map((_, i) => (
               <motion.div
                 key={i}
                 animate={{ 
-                  y: [0, -60, 0], 
+                  y: [0, -40, 0], 
                   opacity: [0, 1, 0],
-                  scale: [0.5, 1.2, 0.5]
+                  scale: [0.5, 1, 0.5]
                 }}
                 transition={{ 
-                  duration: 4 + i, 
+                  duration: 3 + i, 
                   repeat: Infinity, 
-                  delay: i * 0.4 
+                  delay: i * 0.5 
                 }}
-                className="absolute w-2 h-2 bg-red-500 rounded-full blur-[1px]"
+                className="absolute w-1.5 h-1.5 bg-[#fbbf24] rounded-full blur-[0.5px] shadow-[0_0_8px_#f59e0b]"
                 style={{
-                  top: `${Math.random() * 100}%`,
-                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 120 - 10}%`,
+                  left: `${Math.random() * 140 - 20}%`,
                 }}
               />
             ))}
           </motion.div>
 
           <div className="relative flex flex-col items-center group cursor-default">
-            {/* Texto Principal con Efecto Shimmer */}
+            {/* Texto Principal */}
             <div className="relative overflow-hidden">
               <motion.h2 
                 initial={{ y: 20, opacity: 0 }}
@@ -125,9 +154,9 @@ const Login: React.FC = () => {
                 className="text-7xl font-black tracking-tighter text-white drop-shadow-[0_10px_20px_rgba(255,255,255,0.1)] relative"
               >
                 EZEH<span className="text-red-600">ACADEMY</span>
-                {/* Capa de luz reflejante */}
+                {/* Capa de luz reflejante texto */}
                 <motion.div 
-                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent w-full skew-x-[-20deg]"
+                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent w-full skew-x-[-20deg]"
                   initial={{ x: '-150%' }}
                   animate={{ x: '200%' }}
                   transition={{ 

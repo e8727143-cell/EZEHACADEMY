@@ -1,16 +1,23 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
-  Play, FileText, ChevronDown, CheckCircle, Lock, LogOut, Menu, X, Download, ExternalLink
+  Play, FileText, ChevronDown, Lock, LogOut, Menu, X, Zap, ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
+import { User } from '../types';
 
-const Dashboard = () => {
+interface DashboardProps {
+  user: User;
+  onLogout: () => void;
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [courses, setCourses] = useState<any[]>([]);
   const [activeLesson, setActiveLesson] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true); // Para móvil/desktop
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -19,14 +26,12 @@ const Dashboard = () => {
 
   async function fetchData() {
     setLoading(true);
-    // 1. Traemos la misma estructura que en el Admin
     const { data, error } = await supabase
       .from('courses')
       .select('*, modules(*, lessons(*))')
-      .order('created_at', { ascending: true }); // Ordenamos cronológicamente para el alumno
+      .order('created_at', { ascending: true });
 
     if (!error && data) {
-      // Ordenar módulos y lecciones
       const sorted = data.map(c => ({
         ...c,
         modules: c.modules?.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
@@ -37,10 +42,9 @@ const Dashboard = () => {
       }));
       setCourses(sorted);
       
-      // Auto-seleccionar la primera lección del primer curso si existe
       if (sorted.length > 0 && sorted[0].modules?.[0]?.lessons?.[0]) {
         setActiveLesson(sorted[0].modules[0].lessons[0]);
-        setExpandedModules(new Set([sorted[0].modules[0].id])); // Expandir primer módulo
+        setExpandedModules(new Set([sorted[0].modules[0].id]));
       }
     }
     setLoading(false);
@@ -52,10 +56,45 @@ const Dashboard = () => {
     setExpandedModules(next);
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.href = '/';
+  // --- SMART VIDEO EMBEDDER LOGIC ---
+
+  const getEmbedUrl = (url: string) => {
+    if (!url) return '';
+    
+    // 1. Google Drive (CRITICAL FIX)
+    // Converts /view or /view?usp=sharing to /preview for iframe compatibility
+    if (url.includes('drive.google.com')) {
+      return url.replace(/\/view.*/, '/preview');
+    }
+
+    // 2. YouTube
+    if (url.includes('youtube.com') || url.includes('youtu.be')) {
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+      const match = url.match(regExp);
+      return (match && match[2].length === 11)
+        ? `https://www.youtube.com/embed/${match[2]}?modestbranding=1&rel=0`
+        : url;
+    }
+
+    // 3. Vimeo
+    if (url.includes('vimeo.com')) {
+      const regExp = /vimeo\.com\/(\d+)/;
+      const match = url.match(regExp);
+      return match ? `https://player.vimeo.com/video/${match[1]}` : url;
+    }
+
+    return url;
   };
+
+  const isEmbeddable = (url: string) => {
+    if (!url) return false;
+    return url.includes('drive.google.com') ||
+           url.includes('youtube.com') ||
+           url.includes('youtu.be') ||
+           url.includes('vimeo.com');
+  };
+
+  // ----------------------------------
 
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-white font-bold tracking-widest uppercase">Cargando tu Academia...</div>;
 
@@ -63,14 +102,16 @@ const Dashboard = () => {
     <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white p-8 text-center">
         <h1 className="text-3xl font-black uppercase mb-4">No hay contenido disponible</h1>
         <p className="text-zinc-500 mb-8">El administrador aún no ha publicado cursos.</p>
-        <Link to="/admin" className="text-red-600 underline text-sm">Ir al Admin (Si eres tú)</Link>
+        {user.email === 'ezehcontactooficial@gmail.com' && (
+             <Link to="/admin" className="text-red-600 underline text-sm font-black uppercase tracking-widest">Ir al EZEH STUDIO</Link>
+        )}
     </div>
   );
 
   return (
     <div className="min-h-screen bg-[#050505] text-white font-sans flex overflow-hidden">
       
-      {/* --- SIDEBAR (MENÚ DE CURSOS) --- */}
+      {/* --- SIDEBAR --- */}
       <motion.aside 
         initial={false}
         animate={{ width: sidebarOpen ? '350px' : '0px', opacity: sidebarOpen ? 1 : 0 }}
@@ -127,14 +168,23 @@ const Dashboard = () => {
             ))}
         </div>
 
-        <div className="p-4 border-t border-white/5">
-            <button onClick={handleLogout} className="w-full py-3 bg-zinc-900 rounded-xl text-xs font-bold uppercase text-zinc-500 hover:text-white hover:bg-red-600 transition-all flex items-center justify-center gap-2">
+        <div className="p-4 border-t border-white/5 space-y-3">
+            {user.email === 'ezehcontactooficial@gmail.com' && (
+                <Link 
+                    to="/admin" 
+                    className="w-full py-4 rounded-xl text-xs font-black uppercase text-white bg-gradient-to-r from-red-600 to-red-900 hover:scale-[1.02] transition-transform shadow-lg shadow-red-900/30 flex items-center justify-center gap-2 border border-white/10"
+                >
+                    <Zap size={16} className="text-yellow-400 fill-yellow-400 animate-pulse"/> EZEH STUDIO
+                </Link>
+            )}
+
+            <button onClick={onLogout} className="w-full py-3 bg-zinc-900 rounded-xl text-xs font-bold uppercase text-zinc-500 hover:text-white hover:bg-zinc-800 transition-all flex items-center justify-center gap-2">
                 <LogOut size={14}/> Cerrar Sesión
             </button>
         </div>
       </motion.aside>
 
-      {/* --- MAIN CONTENT (PLAYER) --- */}
+      {/* --- MAIN CONTENT --- */}
       <main className="flex-1 h-screen overflow-y-auto relative bg-[#050505]">
         {!sidebarOpen && (
             <button onClick={() => setSidebarOpen(true)} className="absolute top-6 left-6 z-50 p-3 bg-black/50 backdrop-blur-md rounded-full border border-white/10 text-white hover:bg-red-600 transition-all">
@@ -144,35 +194,41 @@ const Dashboard = () => {
 
         {activeLesson ? (
             <div className="max-w-5xl mx-auto p-6 lg:p-12 space-y-8">
-                {/* VIDEO PLAYER AREA */}
-                <div className="w-full aspect-video bg-black rounded-[2rem] border border-white/10 overflow-hidden shadow-2xl relative group">
+                
+                {/* --- SMART VIDEO EMBEDDER UI --- */}
+                <div className="w-full aspect-video bg-black rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl relative group">
                     {activeLesson.video_url ? (
-                        activeLesson.video_url.includes('youtube') || activeLesson.video_url.includes('vimeo') ? (
-                           <iframe 
-                             src={activeLesson.video_url.replace('watch?v=', 'embed/')} 
-                             className="w-full h-full" 
-                             allowFullScreen 
-                             title="Video Player"
-                           />
+                        isEmbeddable(activeLesson.video_url) ? (
+                            <iframe
+                                src={getEmbedUrl(activeLesson.video_url)}
+                                className="w-full h-full"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                                allowFullScreen
+                                title={activeLesson.title}
+                            />
                         ) : (
-                           <div className="w-full h-full flex flex-col items-center justify-center gap-6 bg-zinc-900">
-                               <Play size={64} className="text-zinc-800"/>
-                               <div className="text-center">
-                                   <p className="text-zinc-500 text-sm font-bold uppercase tracking-widest mb-4">Video Externo / Drive</p>
-                                   <a 
-                                     href={activeLesson.video_url} 
-                                     target="_blank" 
-                                     rel="noopener noreferrer"
-                                     className="px-8 py-3 bg-red-600 text-white rounded-full font-black uppercase text-xs hover:bg-red-700 transition-all inline-flex items-center gap-2"
-                                   >
-                                     <ExternalLink size={14}/> Ver Clase
-                                   </a>
-                               </div>
-                           </div>
+                            // UI para enlaces NO incrustables (Zoom, Links directos, etc.)
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0a0a] p-8 text-center bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]">
+                                <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mb-6 border border-white/10 shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+                                    <Play size={40} className="text-white/30 ml-2" />
+                                </div>
+                                <h3 className="text-2xl font-black uppercase italic text-white mb-3 tracking-tight">Formato Externo</h3>
+                                <p className="text-zinc-500 text-xs font-medium mb-10 max-w-md leading-relaxed">
+                                    Esta clase está alojada en un servidor externo o requiere acceso directo para su visualización óptima.
+                                </p>
+                                <a 
+                                    href={activeLesson.video_url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="bg-red-600 hover:bg-red-700 text-white px-10 py-5 rounded-2xl font-black uppercase tracking-[0.2em] flex items-center gap-3 transition-all hover:scale-105 shadow-xl shadow-red-900/20"
+                                >
+                                    <ExternalLink size={20} /> Abrir Clase Externa
+                                </a>
+                            </div>
                         )
                     ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-zinc-900">
-                             <p className="text-zinc-700 font-black uppercase tracking-[0.5em]">Sin Video Asignado</p>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                             <p className="text-zinc-700 font-black uppercase tracking-[0.5em] text-xs">Sin Video Asignado</p>
                         </div>
                     )}
                 </div>
