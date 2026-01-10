@@ -33,7 +33,13 @@ const Login: React.FC = () => {
         if (signUpError) throw signUpError;
 
         if (data.user) {
-          await supabase.from('profiles').insert([{ id: data.user.id, full_name: name, role: 'user' }]);
+          // Usar 'student' en lugar de 'user' para consistencia con el sistema
+          const { error: profileError } = await supabase.from('profiles').insert([{ 
+            id: data.user.id, 
+            full_name: name, 
+            role: 'student' 
+          }]);
+          if (profileError) throw profileError;
         }
 
         setSuccessMsg('¡Cuenta creada! Revisa tu email para confirmar o intenta iniciar sesión.');
@@ -47,6 +53,7 @@ const Login: React.FC = () => {
         }
       }
     } catch (err: any) {
+      console.error("Auth Error:", err.message || err);
       setError(err.message || 'Ocurrió un error inesperado.');
     } finally {
       setLoading(false);

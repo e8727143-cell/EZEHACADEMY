@@ -1,4 +1,3 @@
-
 import { Course } from './types';
 
 // Updated property names to snake_case (video_url) to satisfy Lesson interface
@@ -10,10 +9,12 @@ export const INITIAL_COURSE: Course = {
   modules: [
     {
       id: "m1",
+      course_id: "c1",
       title: "Introducción al Ecosistema",
       lessons: [
         {
           id: "l1",
+          module_id: "m1",
           title: "Bienvenida al Master",
           duration: "05:20",
           video_url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
@@ -25,6 +26,7 @@ export const INITIAL_COURSE: Course = {
         },
         {
           id: "l2",
+          module_id: "m1",
           title: "Configuración del entorno PRO",
           duration: "12:45",
           video_url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
@@ -37,10 +39,12 @@ export const INITIAL_COURSE: Course = {
     },
     {
       id: "m2",
+      course_id: "c1",
       title: "Arquitectura y Diseño",
       lessons: [
         {
           id: "l3",
+          module_id: "m2",
           title: "Diseño de bases de datos escalables",
           duration: "45:00",
           video_url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
@@ -51,6 +55,7 @@ export const INITIAL_COURSE: Course = {
         },
         {
           id: "l4",
+          module_id: "m2",
           title: "APIs y Microservicios Modernos",
           duration: "38:15",
           video_url: "https://www.youtube.com/embed/dQw4w9WgXcQ",

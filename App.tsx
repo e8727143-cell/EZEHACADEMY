@@ -35,24 +35,11 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Tracking de actividad y Presence API
+  // Tracking de actividad mediante Presence API (Evita errores de base de datos)
   useEffect(() => {
     if (user) {
-      // 1. Heartbeat Database (Respaldo histórico)
-      const updateActivity = async () => {
-        try {
-          await supabase
-            .from('profiles')
-            .update({ last_seen: new Date().toISOString() })
-            .eq('id', user.id);
-        } catch (e) {
-          console.error("Error updating heartbeat", e);
-        }
-      };
-      updateActivity();
-      const interval = setInterval(updateActivity, 3 * 60 * 1000);
-
-      // 2. Presence API (Tracking en tiempo real instantáneo)
+      // Usamos únicamente Presence API para tracking en tiempo real.
+      // Esto elimina el error "Could not find the 'last_seen' column" al no intentar escribir en una tabla que no tiene esa columna.
       const channel = supabase.channel('online-users', {
         config: {
           presence: {
@@ -66,17 +53,17 @@ const App: React.FC = () => {
           if (status === 'SUBSCRIBED') {
             await channel.track({
               user_id: user.id,
+              full_name: user.fullName,
               online_at: new Date().toISOString(),
             });
           }
         });
 
       return () => {
-        clearInterval(interval);
         supabase.removeChannel(channel);
       };
     }
-  }, [user?.id]);
+  }, [user?.id, user?.fullName]);
 
   const mapSupabaseUser = (sbUser: any) => {
     const isAdmin = sbUser.email === ADMIN_EMAIL;
