@@ -1,6 +1,8 @@
+
 import { Course } from './types';
 
 // Updated property names to snake_case (video_url) to satisfy Lesson interface
+// Updated resources to be a single string URL to match the application logic
 export const INITIAL_COURSE: Course = {
   id: "c1",
   title: "Master en Desarrollo Digital Premium",
@@ -19,10 +21,7 @@ export const INITIAL_COURSE: Course = {
           duration: "05:20",
           video_url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
           description: "En esta primera lección, te damos la bienvenida al programa y exploramos la metodología de aprendizaje que utilizaremos durante los próximos meses.",
-          resources: [
-            { name: "Guía de Bienvenida.pdf", url: "#" },
-            { name: "Roadmap_2024.png", url: "#" }
-          ]
+          resources: "https://example.com/guia_bienvenida.pdf"
         },
         {
           id: "l2",
@@ -31,9 +30,7 @@ export const INITIAL_COURSE: Course = {
           duration: "12:45",
           video_url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
           description: "Aprenderás a configurar tu terminal, editor de código y herramientas de depuración para maximizar tu productividad diaria.",
-          resources: [
-            { name: "CheatSheet_VSCode.pdf", url: "#" }
-          ]
+          resources: "https://example.com/cheatsheet.pdf"
         }
       ]
     },
@@ -49,9 +46,7 @@ export const INITIAL_COURSE: Course = {
           duration: "45:00",
           video_url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
           description: "Profundizamos en el diseño de esquemas relacionales y no relacionales, optimización de queries y normalización avanzada.",
-          resources: [
-            { name: "Esquema_DB.sql", url: "#" }
-          ]
+          resources: "https://example.com/esquema_db.sql"
         },
         {
           id: "l4",
@@ -60,7 +55,7 @@ export const INITIAL_COURSE: Course = {
           duration: "38:15",
           video_url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
           description: "Conceptos fundamentales de REST vs GraphQL y cómo estructurar servicios independientes que se comuniquen de forma eficiente.",
-          resources: []
+          resources: ""
         }
       ]
     }

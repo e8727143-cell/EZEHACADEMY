@@ -6,7 +6,7 @@ export interface Lesson {
   video_url: string;
   duration?: string;
   description: string;
-  resources: { name: string; url: string }[];
+  resources?: string; // Changed from object array to string URL to match Admin/Dashboard implementation
   order_index?: number;
   created_at?: string;
 }
