@@ -149,6 +149,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
   useEffect(() => {
     if (activeLesson) fetchLessonRating(activeLesson.id);
+    else setUserRating(0);
   }, [activeLesson]);
 
   async function fetchCourses() {
@@ -178,14 +179,24 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   }
 
   async function fetchLessonRating(lessonId: string) {
-    const { data } = await supabase.from('lesson_ratings').select('rating').eq('user_id', user.id).eq('lesson_id', lessonId).single();
+    // Use maybeSingle() instead of single() to avoid errors in console if no rating exists
+    const { data } = await supabase.from('lesson_ratings').select('rating').eq('user_id', user.id).eq('lesson_id', lessonId).maybeSingle();
     setUserRating(data ? data.rating : 0);
   }
 
   const handleRateLesson = async (rating: number) => {
     setUserRating(rating);
     if (!activeLesson) return;
-    await supabase.from('lesson_ratings').upsert({ user_id: user.id, lesson_id: activeLesson.id, rating: rating }, { onConflict: 'user_id, lesson_id' });
+    
+    const { error } = await supabase.from('lesson_ratings').upsert(
+        { user_id: user.id, lesson_id: activeLesson.id, rating: rating }, 
+        { onConflict: 'user_id, lesson_id' }
+    );
+    
+    if (error) {
+        console.error("Error saving rating:", error);
+        // Optional: Revert state if needed, but keeping optimistic update is usually fine for UX
+    }
   };
 
   const toggleLessonCompletion = async (lessonId: string) => {
