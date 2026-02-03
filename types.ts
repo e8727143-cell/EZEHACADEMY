@@ -15,6 +15,7 @@ export interface Module {
   id: string;
   course_id: string; // Obligatorio
   title: string;
+  thumbnail?: string; // Nuevo campo para la imagen del módulo
   lessons: Lesson[];
   order_index?: number;
   created_at?: string;

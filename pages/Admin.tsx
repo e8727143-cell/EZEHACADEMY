@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  Trash2, LogOut, ChevronDown, Layout, Box, Video, X, Plus, FileText, Link as LinkIcon, Save, PlusCircle, Upload, CheckCircle, Loader2, LayoutDashboard, ArrowLeft, Pencil, Users, Activity, Signal, Search, TrendingUp, Shield, RefreshCw, Zap, Crown
+  Trash2, LogOut, ChevronDown, Layout, Box, Video, X, Plus, FileText, Link as LinkIcon, Save, PlusCircle, Upload, CheckCircle, Loader2, LayoutDashboard, ArrowLeft, Pencil, Users, Activity, Signal, Search, TrendingUp, Shield, RefreshCw, Zap, Crown, Image as ImageIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase, ADMIN_EMAIL } from '../lib/supabase';
@@ -23,6 +23,8 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
   const [isEditing, setIsEditing] = useState(false);
   const [tempId, setTempId] = useState<string>(''); 
   const [inputTitle, setInputTitle] = useState('');
+  // New State for Module Thumbnail
+  const [inputModuleThumbnail, setInputModuleThumbnail] = useState('');
   const [lessonData, setLessonData] = useState({ title: '', video_url: '', description: '', resources: '' });
   const [uploading, setUploading] = useState(false);
 
@@ -107,12 +109,12 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
 
   // --- 2. CONTENT MANAGEMENT LOGIC ---
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLessonFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
     const fileExt = file.name.split('.').pop();
     const fileName = `${Math.random()}.${fileExt}`;
-    const filePath = `${fileName}`;
+    const filePath = `lesson_${fileName}`;
     setUploading(true);
     try {
       const { error: uploadError } = await supabase.storage.from('course_materials').upload(filePath, file);
@@ -120,6 +122,23 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
       const { data } = supabase.storage.from('course_materials').getPublicUrl(filePath);
       setLessonData(prev => ({ ...prev, resources: data.publicUrl }));
       showNotify('success', 'ARCHIVO SUBIDO CORRECTAMENTE');
+    } catch (error: any) { alert("Error: " + error.message); } 
+    finally { setUploading(false); }
+  };
+
+  const handleModuleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random()}.${fileExt}`;
+    const filePath = `module_thumb_${fileName}`;
+    setUploading(true);
+    try {
+      const { error: uploadError } = await supabase.storage.from('course_materials').upload(filePath, file);
+      if (uploadError) throw uploadError;
+      const { data } = supabase.storage.from('course_materials').getPublicUrl(filePath);
+      setInputModuleThumbnail(data.publicUrl);
+      showNotify('success', 'PORTADA DE MÓDULO SUBIDA');
     } catch (error: any) { alert("Error: " + error.message); } 
     finally { setUploading(false); }
   };
@@ -136,9 +155,11 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
 
   const submitModule = async () => {
     if (!inputTitle.trim()) return;
+    const payload = { title: inputTitle, thumbnail: inputModuleThumbnail };
+    
     const { error } = isEditing
-        ? await supabase.from('modules').update({ title: inputTitle }).eq('id', tempId)
-        : await supabase.from('modules').insert([{ title: inputTitle, course_id: tempId }]);
+        ? await supabase.from('modules').update(payload).eq('id', tempId)
+        : await supabase.from('modules').insert([{ ...payload, course_id: tempId }]);
 
     if (!error) { closeModal(); fetchContentData(); showNotify('success', isEditing ? 'MÓDULO ACTUALIZADO' : 'MÓDULO CREADO'); }
     else alert(error.message);
@@ -165,11 +186,25 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
   // --- HELPERS ---
   const openCreateCourse = () => { setModalType('COURSE'); setIsEditing(false); setInputTitle(''); };
   const openEditCourse = (c: any) => { setModalType('COURSE'); setIsEditing(true); setTempId(c.id); setInputTitle(c.title); };
-  const openCreateModule = (cId: string) => { setTempId(cId); setModalType('MODULE'); setIsEditing(false); setInputTitle(''); };
-  const openEditModule = (m: any) => { setTempId(m.id); setModalType('MODULE'); setIsEditing(true); setInputTitle(m.title); };
+  
+  const openCreateModule = (cId: string) => { 
+      setTempId(cId); 
+      setModalType('MODULE'); 
+      setIsEditing(false); 
+      setInputTitle(''); 
+      setInputModuleThumbnail(''); 
+  };
+  const openEditModule = (m: any) => { 
+      setTempId(m.id); 
+      setModalType('MODULE'); 
+      setIsEditing(true); 
+      setInputTitle(m.title); 
+      setInputModuleThumbnail(m.thumbnail || '');
+  };
+
   const openCreateLesson = (mId: string) => { setTempId(mId); setModalType('LESSON'); setIsEditing(false); setLessonData({ title: '', video_url: '', description: '', resources: '' }); };
   const openEditLesson = (l: any) => { setTempId(l.id); setModalType('LESSON'); setIsEditing(true); setLessonData({ title: l.title, video_url: l.video_url||'', description: l.description||'', resources: l.resources||'' }); };
-  const closeModal = () => { setModalType('NONE'); setTempId(''); setInputTitle(''); };
+  const closeModal = () => { setModalType('NONE'); setTempId(''); setInputTitle(''); setInputModuleThumbnail(''); };
   
   const toggleCourse = (id: string) => {
     const next = new Set(expandedCourses);
@@ -313,7 +348,11 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
                                                 <div key={mod.id} className="bg-black/40 border border-white/5 rounded-2xl overflow-hidden">
                                                     <div className="p-4 flex justify-between items-center bg-white/5 border-b border-white/5">
                                                         <div className="flex items-center gap-3">
-                                                            <Box size={14} className="text-zinc-500"/>
+                                                            {mod.thumbnail ? (
+                                                                <img src={mod.thumbnail} alt="thumb" className="w-10 h-6 object-cover rounded border border-white/10" />
+                                                            ) : (
+                                                                <Box size={14} className="text-zinc-500"/>
+                                                            )}
                                                             <span className="font-bold text-sm text-zinc-300 uppercase tracking-wide">{mod.title}</span>
                                                             <button onClick={() => openEditModule(mod)} className="text-zinc-600 hover:text-white"><Pencil size={12}/></button>
                                                         </div>
@@ -558,8 +597,34 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
             <div className="bg-[#0f0f0f] p-10 rounded-[3rem] w-full max-w-lg border border-white/10 relative shadow-2xl">
                 <button onClick={closeModal} className="absolute top-8 right-8 text-zinc-500 hover:text-white transition-colors"><X/></button>
                 <h2 className="text-2xl font-black italic uppercase mb-8 flex items-center gap-3"><Box className="text-red-600"/> {isEditing ? 'Editar' : 'Nuevo'} Módulo</h2>
-                <input autoFocus type="text" value={inputTitle} onChange={e => setInputTitle(e.target.value)} className="w-full bg-black border border-white/10 p-6 rounded-2xl text-white font-bold outline-none focus:border-red-600 mb-6 placeholder:text-zinc-800 transition-colors" placeholder="NOMBRE DEL MÓDULO..."/>
-                <button onClick={submitModule} className="w-full bg-white text-black py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-zinc-200 transition-all">{isEditing ? 'Guardar Cambios' : 'Añadir Módulo'}</button>
+                
+                <div className="space-y-4">
+                  <input autoFocus type="text" value={inputTitle} onChange={e => setInputTitle(e.target.value)} className="w-full bg-black border border-white/10 p-6 rounded-2xl text-white font-bold outline-none focus:border-red-600 placeholder:text-zinc-800 transition-colors" placeholder="NOMBRE DEL MÓDULO..."/>
+                  
+                  {/* Thumbnail Upload for Module */}
+                  <div className="w-full bg-black border-2 border-dashed border-white/10 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 hover:border-red-600/50 transition-colors relative">
+                      {uploading ? (
+                          <div className="flex flex-col items-center text-red-600 animate-pulse">
+                              <Loader2 className="animate-spin" size={24}/>
+                              <span className="text-[10px] font-black uppercase mt-2">Subiendo...</span>
+                          </div>
+                      ) : inputModuleThumbnail ? (
+                          <div className="w-full relative group/img">
+                              <img src={inputModuleThumbnail} alt="Thumbnail" className="w-full h-32 object-cover rounded-xl border border-white/20"/>
+                              <button onClick={() => setInputModuleThumbnail('')} className="absolute top-2 right-2 p-1 bg-black/50 rounded-full hover:bg-red-600 hover:text-white transition-colors"><Trash2 size={12}/></button>
+                              <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-[10px] text-white font-bold uppercase backdrop-blur-sm flex items-center gap-1"><CheckCircle size={10} className="text-green-500"/> Portada cargada</div>
+                          </div>
+                      ) : (
+                          <>
+                              <ImageIcon size={24} className="text-zinc-700"/>
+                              <p className="text-[10px] font-black uppercase text-zinc-500">Subir Portada (Opcional)</p>
+                              <input type="file" accept="image/*" onChange={handleModuleThumbnailUpload} className="absolute inset-0 opacity-0 cursor-pointer"/>
+                          </>
+                      )}
+                  </div>
+                </div>
+
+                <button onClick={submitModule} disabled={uploading} className={`w-full bg-white text-black py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-zinc-200 transition-all mt-6 ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>{isEditing ? 'Guardar Cambios' : 'Añadir Módulo'}</button>
             </div>
         </div>
       )}
@@ -607,7 +672,7 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
                                 <>
                                     <Upload size={32} className="text-zinc-700"/>
                                     <p className="text-xs font-black uppercase text-zinc-500">Arrastra archivo aquí</p>
-                                    <input type="file" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer"/>
+                                    <input type="file" onChange={handleLessonFileUpload} className="absolute inset-0 opacity-0 cursor-pointer"/>
                                 </>
                             )}
                         </div>

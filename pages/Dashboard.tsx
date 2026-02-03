@@ -589,6 +589,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                             const prevModuleStats = index > 0 ? getModuleStats(activeCourse.modules[index - 1]) : { percent: 100 };
                             const isLocked = !isAdmin && index > 0 && prevModuleStats.percent < 100;
 
+                            // Use module's thumbnail if available, otherwise fallback to random default image
+                            const bgImage = mod.thumbnail || MODULE_IMAGES[index % MODULE_IMAGES.length];
+
                             return (
                                 <div 
                                     key={mod.id} 
@@ -596,7 +599,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                                     className={`skewed-card group relative bg-gradient-to-b from-[#2a0a0a] to-black border border-white/5 rounded-2xl overflow-hidden cursor-pointer ${isLocked ? 'opacity-70 grayscale' : ''}`}
                                 >
                                     <div className="aspect-[16/10] overflow-hidden relative">
-                                        <div className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" style={{ backgroundImage: `url("${MODULE_IMAGES[index % MODULE_IMAGES.length]}")` }}/>
+                                        <div className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" style={{ backgroundImage: `url("${bgImage}")` }}/>
                                         <div className="absolute inset-0 bg-gradient-to-t from-[#0f0f0f] via-transparent to-transparent"></div>
                                         <div className="absolute top-4 left-4 bg-black/80 backdrop-blur-md px-3 py-1 rounded border border-white/10 text-[9px] font-black tracking-widest uppercase content-unskew text-zinc-300">
                                             Módulo 0{index + 1}

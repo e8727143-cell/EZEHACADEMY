@@ -4,6 +4,7 @@ import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login.tsx';
 import Dashboard from './pages/Dashboard.tsx';
 import Admin from './pages/Admin.tsx';
+import UpdatePassword from './pages/UpdatePassword.tsx';
 import { User } from './types.ts';
 import { supabase, ADMIN_EMAIL } from './lib/supabase.ts';
 import { ShieldAlert, Home, LogOut, Loader2 } from 'lucide-react';
@@ -122,6 +123,7 @@ const App: React.FC = () => {
       <Routes>
         <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Navigate to="/login" />} />
         <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
+        <Route path="/update-password" element={<UpdatePassword />} />
         <Route path="/dashboard" element={user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} />
         <Route path="/admin" element={user ? (user.role === 'admin' ? <Admin user={user} onLogout={handleLogout} /> : <AccessDenied />) : <Navigate to="/login" />} />
         <Route path="*" element={<Navigate to="/" />} />
