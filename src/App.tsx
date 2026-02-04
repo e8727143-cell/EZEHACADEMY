@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Admin from './pages/Admin';
@@ -9,25 +9,12 @@ import { User } from './types';
 import { supabase, ADMIN_EMAIL } from './lib/supabase';
 import { ShieldAlert, Home, Loader2 } from 'lucide-react';
 
-// --- COMPONENTE AUXILIAR PARA REDIRECCIÓN DE EMAIL ---
-// Este componente detecta si alguien entra a "tudominio.com/update-password"
-// y lo redirige suavemente a "tudominio.com/#/update-password" para que HashRouter lo procese.
-const EmailLinkRedirector = () => {
-  useEffect(() => {
-    const path = window.location.pathname;
-    if (path === '/update-password' || path.includes('/update-password')) {
-      window.location.hash = '#/update-password';
-    }
-  }, []);
-  return null;
-};
-
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Verificar sesión inicial
+    // Verificar sesión inicial
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         mapSupabaseUser(session.user);
@@ -36,7 +23,7 @@ const App: React.FC = () => {
       }
     });
 
-    // 2. Escuchar cambios de estado (Login, Logout, Auto-refresh)
+    // Escuchar cambios de estado
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
         mapSupabaseUser(session.user);
@@ -49,24 +36,31 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // 3. Tracking de actividad (Online Status)
+  // Tracking de actividad mediante Presence API
   useEffect(() => {
     if (user) {
       const channel = supabase.channel('online-users', {
-        config: { presence: { key: user.id } },
+        config: {
+          presence: {
+            key: user.id,
+          },
+        },
       });
 
-      channel.subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await channel.track({
-            user_id: user.id,
-            full_name: user.fullName,
-            online_at: new Date().toISOString(),
-          });
-        }
-      });
+      channel
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            await channel.track({
+              user_id: user.id,
+              full_name: user.fullName,
+              online_at: new Date().toISOString(),
+            });
+          }
+        });
 
-      return () => { supabase.removeChannel(channel); };
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [user?.id, user?.fullName]);
 
@@ -105,38 +99,31 @@ const App: React.FC = () => {
     );
   }
 
-  const AccessDenied = () => {
-    return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-20 h-20 bg-red-600/10 border border-red-600/20 rounded-full flex items-center justify-center mb-6">
-          <ShieldAlert size={40} className="text-red-600" />
-        </div>
-        <h1 className="text-3xl font-black mb-4 uppercase italic">ACCESO DENEGADO</h1>
-        <p className="text-gray-500 max-w-md mb-8 text-sm font-medium">
-          No tienes privilegios de administrador.
-        </p>
-        <a href="/" className="bg-white text-black px-8 py-4 rounded-2xl font-black uppercase text-xs hover:bg-red-600 hover:text-white transition-all inline-flex items-center">
-          <Home size={18} className="mr-2"/> Ir al Inicio
-        </a>
+  const AccessDenied = () => (
+    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
+      <div className="w-20 h-20 bg-red-600/10 border border-red-600/20 rounded-full flex items-center justify-center mb-6">
+        <ShieldAlert size={40} className="text-red-600" />
       </div>
-    );
-  };
+      <h1 className="text-3xl font-black mb-4 uppercase italic">ACCESO DENEGADO</h1>
+      <p className="text-gray-500 max-w-md mb-8 text-sm font-medium">
+        No tienes privilegios de administrador. Contacta al soporte si esto es un error.
+      </p>
+      <div className="flex gap-4">
+        <button onClick={() => window.location.href = '/dashboard'} className="bg-white text-black px-8 py-4 rounded-2xl font-black uppercase text-xs hover:bg-red-600 hover:text-white transition-all">
+          <Home size={18} className="inline mr-2"/> Inicio
+        </button>
+      </div>
+    </div>
+  );
 
   return (
-    // USAMOS HASHROUTER PARA EVITAR EL CRASH EN PREVIEW
     <Router>
-      <EmailLinkRedirector />
       <Routes>
-        {/* RUTA UPDATE PASSWORD: Accesible directamente via /#/update-password */}
-        <Route path="/update-password" element={<UpdatePassword />} />
-        
-        {/* RUTAS PROTEGIDAS */}
+        <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Navigate to="/login" />} />
         <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
+        <Route path="/update-password" element={<UpdatePassword />} />
         <Route path="/dashboard" element={user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} />
         <Route path="/admin" element={user ? (user.role === 'admin' ? <Admin user={user} onLogout={handleLogout} /> : <AccessDenied />) : <Navigate to="/login" />} />
-        
-        {/* ROOT & CATCH-ALL */}
-        <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Navigate to="/login" />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>
