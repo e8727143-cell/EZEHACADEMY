@@ -13,11 +13,10 @@ const UpdatePassword = () => {
   const [sessionCheck, setSessionCheck] = useState(true);
   const navigate = useNavigate();
 
-  // Verificar que el usuario realmente tiene una sesión activa (por el link del email)
+  // Verificar que el usuario realmente tiene una sesión activa (obtenida al hacer clic en el link del email)
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
-        // Si no hay sesión, el link es inválido o expiró
         setError("El enlace de activación ha expirado o es inválido.");
       }
       setSessionCheck(false);
@@ -115,7 +114,7 @@ const UpdatePassword = () => {
                 className="w-full bg-[#050505] border border-white/10 rounded-2xl px-14 pr-12 py-5 focus:border-red-600/50 outline-none transition-all text-sm font-bold text-white placeholder:text-zinc-800 shadow-inner"
                 placeholder="Mínimo 6 caracteres"
                 required
-                disabled={!!error && !password} // Deshabilitar si hubo error de sesión
+                disabled={!!error && !password} 
               />
               <button
                 type="button"

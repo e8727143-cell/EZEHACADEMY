@@ -123,6 +123,7 @@ const App: React.FC = () => {
       <Routes>
         <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Navigate to="/login" />} />
         <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
+        {/* Aquí registramos la ruta de actualización de contraseña */}
         <Route path="/update-password" element={<UpdatePassword />} />
         <Route path="/dashboard" element={user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} />
         <Route path="/admin" element={user ? (user.role === 'admin' ? <Admin user={user} onLogout={handleLogout} /> : <AccessDenied />) : <Navigate to="/login" />} />
