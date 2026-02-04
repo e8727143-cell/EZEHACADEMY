@@ -1,13 +1,12 @@
-
 import React, { useState, useEffect } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Login from './pages/Login.tsx';
-import Dashboard from './pages/Dashboard.tsx';
-import Admin from './pages/Admin.tsx';
-import UpdatePassword from './pages/UpdatePassword.tsx';
-import { User } from './types.ts';
-import { supabase, ADMIN_EMAIL } from './lib/supabase.ts';
-import { ShieldAlert, Home, LogOut, Loader2 } from 'lucide-react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import Admin from './pages/Admin';
+import UpdatePassword from './pages/UpdatePassword';
+import { User } from './types';
+import { supabase, ADMIN_EMAIL } from './lib/supabase';
+import { ShieldAlert, Home, Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -36,33 +35,24 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Tracking de actividad mediante Presence API (Evita errores de base de datos)
+  // Tracking de actividad
   useEffect(() => {
     if (user) {
-      // Usamos únicamente Presence API para tracking en tiempo real.
-      // Esto elimina el error "Could not find the 'last_seen' column" al no intentar escribir en una tabla que no tiene esa columna.
       const channel = supabase.channel('online-users', {
-        config: {
-          presence: {
-            key: user.id,
-          },
-        },
+        config: { presence: { key: user.id } },
       });
 
-      channel
-        .subscribe(async (status) => {
-          if (status === 'SUBSCRIBED') {
-            await channel.track({
-              user_id: user.id,
-              full_name: user.fullName,
-              online_at: new Date().toISOString(),
-            });
-          }
-        });
+      channel.subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({
+            user_id: user.id,
+            full_name: user.fullName,
+            online_at: new Date().toISOString(),
+          });
+        }
+      });
 
-      return () => {
-        supabase.removeChannel(channel);
-      };
+      return () => { supabase.removeChannel(channel); };
     }
   }, [user?.id, user?.fullName]);
 
@@ -101,29 +91,29 @@ const App: React.FC = () => {
     );
   }
 
-  const AccessDenied = () => (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
-      <div className="w-20 h-20 bg-red-600/10 border border-red-600/20 rounded-full flex items-center justify-center mb-6">
-        <ShieldAlert size={40} className="text-red-600" />
+  const AccessDenied = () => {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-20 h-20 bg-red-600/10 border border-red-600/20 rounded-full flex items-center justify-center mb-6">
+          <ShieldAlert size={40} className="text-red-600" />
+        </div>
+        <h1 className="text-3xl font-black mb-4 uppercase italic">ACCESO DENEGADO</h1>
+        <p className="text-gray-500 max-w-md mb-8 text-sm font-medium">
+          No tienes privilegios de administrador.
+        </p>
+        <a href="/" className="bg-white text-black px-8 py-4 rounded-2xl font-black uppercase text-xs hover:bg-red-600 hover:text-white transition-all inline-flex items-center">
+          <Home size={18} className="mr-2"/> Ir al Inicio
+        </a>
       </div>
-      <h1 className="text-3xl font-black mb-4 uppercase italic">ACCESO DENEGADO</h1>
-      <p className="text-gray-500 max-w-md mb-8 text-sm font-medium">
-        No tienes privilegios de administrador. Contacta al soporte si esto es un error.
-      </p>
-      <div className="flex gap-4">
-        <button onClick={() => window.location.hash = '#/dashboard'} className="bg-white text-black px-8 py-4 rounded-2xl font-black uppercase text-xs hover:bg-red-600 hover:text-white transition-all">
-          <Home size={18} className="inline mr-2"/> Inicio
-        </button>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <Router>
       <Routes>
         <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Navigate to="/login" />} />
         <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
-        {/* Aquí registramos la ruta de actualización de contraseña */}
+        {/* Aquí está la ruta mágica que ahora SÍ funcionará con el email */}
         <Route path="/update-password" element={<UpdatePassword />} />
         <Route path="/dashboard" element={user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} />
         <Route path="/admin" element={user ? (user.role === 'admin' ? <Admin user={user} onLogout={handleLogout} /> : <AccessDenied />) : <Navigate to="/login" />} />
