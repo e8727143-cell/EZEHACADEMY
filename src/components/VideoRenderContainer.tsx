@@ -78,6 +78,8 @@ export default function VideoRenderContainer({ videoUrl, title = "Clase Protegid
         }}
         allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
         allowFullScreen={true}
+        // Atributo maestro para indicarle a Bunny de qué dominio web venimos
+        referrerPolicy="origin"
         // Desactiva el menú de clic derecho dentro del marco del iframe
         onContextMenu={(e) => e.preventDefault()}
       />
