@@ -18,7 +18,7 @@ interface DashboardProps {
 }
 
 type Rank = "Novato" | "Creador" | "Maestro";
-type ViewState = 'HOME' | 'COURSE' | 'MODULE' | 'PLAYER' | 'NICHES' | 'COURSES';
+type ViewState = 'HOME' | 'COURSE' | 'MODULE' | 'PLAYER' | 'NICHES' | 'COURSES' | 'TOOLS';
 
 // --- CUSTOM STYLES ---
 const CUSTOM_STYLES = `
@@ -121,7 +121,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [courses, setCourses] = useState<any[]>([]);
   const [niches, setNiches] = useState<Niche[]>([]);
   const [newNicheUrl, setNewNicheUrl] = useState('');
-  const [newNicheDescription, setNewNicheDescription] = useState('');
   const [isNichesOpen, setIsNichesOpen] = useState(false);
   const [savingNiche, setSavingNiche] = useState(false);
   const [completedLessons, setCompletedLessons] = useState<Set<string>>(new Set());
@@ -221,7 +220,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         .insert([{ 
             url: newNicheUrl.trim(), 
             name: name,
-            description: newNicheDescription.trim().substring(0, 200),
             thumbnail: null, // No thumbnail without API
             subscriber_count: null,
             video_count: null,
@@ -235,7 +233,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         setNiches([data[0], ...niches]);
       }
       setNewNicheUrl('');
-      setNewNicheDescription('');
     } catch (err: any) {
       console.error('Error adding niche:', err);
       alert(`Error: ${err.message}`);
@@ -548,11 +545,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         </div>
 
         <div className="p-4 border-b border-white/5">
-             <div onClick={goHome} className={`relative overflow-hidden w-full p-6 rounded-2xl cursor-pointer group transition-all duration-500 shadow-2xl ${isAdmin ? 'bg-gradient-to-r from-[#b45309] via-[#78350f] to-black' : 'bg-gradient-to-r from-red-800 via-red-950 to-black'}`}>
+             <div onClick={goHome} className={`relative overflow-hidden w-full p-6 rounded-2xl cursor-pointer group transition-all duration-500 shadow-[0_0_20px_rgba(234,42,51,0.2)] bg-gradient-to-br from-red-600 to-red-900 border border-white/20 hover:border-white/40`}>
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-12 animate-[shimmer_3s_infinite]" />
-                <div className="relative z-10 flex items-center justify-between">
-                    <span className={`text-sm font-black uppercase tracking-[0.2em] ${isAdmin ? 'text-yellow-100' : 'text-white'}`}>Panel Home</span>
-                    <div className={`p-2 rounded-full border ${isAdmin ? 'bg-yellow-500 text-black border-yellow-300' : 'bg-white text-red-600 border-white'} shadow-[0_0_15px_rgba(255,255,255,0.4)]`}><Home size={14} /></div>
+                <div className="relative z-10 flex items-center justify-center">
+                    <span className={`text-sm font-black uppercase tracking-[0.2em] text-white drop-shadow-md group-hover:scale-105 transition-transform`}>PANEL HOME</span>
                 </div>
             </div>
         </div>
@@ -601,44 +597,48 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                         onClick={() => { setViewState('COURSES'); setActiveCourse(null); setActiveModule(null); setActiveLesson(null); }} 
                         className={`relative overflow-hidden p-5 rounded-2xl border transition-all cursor-pointer group ${
                             viewState === 'COURSES' || viewState === 'COURSE' || viewState === 'MODULE' || viewState === 'PLAYER'
-                                ? 'bg-red-600/20 border-red-600' 
-                                : 'bg-black border-white/10 hover:border-white/30'
+                                ? 'bg-gradient-to-br from-white/20 to-white/5 border-white/40 shadow-[0_0_20px_rgba(255,255,255,0.1)]' 
+                                : 'bg-gradient-to-br from-red-600 to-red-800 border-white/20 hover:border-white/40 hover:from-red-500 hover:to-red-700 shadow-[0_0_15px_rgba(234,42,51,0.2)]'
                         }`}
                     >
-                        <div className="flex items-center gap-4 relative z-10">
-                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                                viewState === 'COURSES' || viewState === 'COURSE' || viewState === 'MODULE' || viewState === 'PLAYER'
-                                    ? 'bg-red-600 text-white shadow-[0_0_15px_rgba(234,42,51,0.4)]' 
-                                    : 'bg-zinc-900 text-zinc-500'
-                            }`}>
-                                <BookOpen size={18} />
-                            </div>
+                        <div className="flex items-center justify-between relative z-10">
                             <div className="flex-1 min-w-0">
-                                <h3 className={`text-xs font-black uppercase truncate ${
-                                    viewState === 'COURSES' || viewState === 'COURSE' || viewState === 'MODULE' || viewState === 'PLAYER'
-                                        ? 'text-red-500' 
-                                        : 'text-zinc-400 group-hover:text-zinc-200'
-                                }`}>CURSOS</h3>
-                                <p className="text-[9px] text-red-500 font-bold uppercase tracking-wider">{courses.length} DISPONIBLES</p>
+                                <h3 className="text-sm font-black uppercase truncate text-white">CURSOS</h3>
                             </div>
-                            {(viewState === 'COURSES' || viewState === 'COURSE' || viewState === 'MODULE' || viewState === 'PLAYER') && <ChevronRight size={14} className="text-red-600"/>}
+                            {(viewState === 'COURSES' || viewState === 'COURSE' || viewState === 'MODULE' || viewState === 'PLAYER') && <ChevronRight size={18} className="text-white"/>}
                         </div>
-                        {(viewState === 'COURSES' || viewState === 'COURSE' || viewState === 'MODULE' || viewState === 'PLAYER') && <div className="absolute inset-0 bg-gradient-to-r from-red-600/10 to-transparent pointer-events-none"/>}
                     </div>
 
                     {/* NICHES BUTTON */}
-                    <div onClick={() => { setViewState('NICHES'); setActiveCourse(null); setActiveModule(null); setActiveLesson(null); }} className={`relative overflow-hidden p-5 rounded-2xl border transition-all cursor-pointer group ${viewState === 'NICHES' ? 'bg-white/10 border-red-600/50' : 'bg-black border-white/10 hover:border-white/30'}`}>
-                        <div className="flex items-center gap-4 relative z-10">
-                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${viewState === 'NICHES' ? 'bg-red-600 text-white shadow-[0_0_15px_rgba(234,42,51,0.4)]' : 'bg-zinc-900 text-zinc-500'}`}>
-                                <Youtube size={18} />
-                            </div>
+                    <div onClick={() => { setViewState('NICHES'); setActiveCourse(null); setActiveModule(null); setActiveLesson(null); }} 
+                        className={`relative overflow-hidden p-5 rounded-2xl border transition-all cursor-pointer group ${
+                            viewState === 'NICHES'
+                                ? 'bg-gradient-to-br from-white/20 to-white/5 border-white/40 shadow-[0_0_20px_rgba(255,255,255,0.1)]' 
+                                : 'bg-gradient-to-br from-red-600 to-red-800 border-white/20 hover:border-white/40 hover:from-red-500 hover:to-red-700 shadow-[0_0_15px_rgba(234,42,51,0.2)]'
+                        }`}
+                    >
+                        <div className="flex items-center justify-between relative z-10">
                             <div className="flex-1 min-w-0">
-                                <h3 className={`text-xs font-black uppercase truncate ${viewState === 'NICHES' ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-200'}`}>NICHOS</h3>
-                                <p className="text-[9px] text-zinc-600 mt-1 uppercase tracking-wider">{niches.length} Canales</p>
+                                <h3 className="text-sm font-black uppercase truncate text-white">NICHOS</h3>
                             </div>
-                            {viewState === 'NICHES' && <ChevronRight size={14} className="text-red-600"/>}
+                            {viewState === 'NICHES' && <ChevronRight size={18} className="text-white"/>}
                         </div>
-                        {viewState === 'NICHES' && <div className="absolute inset-0 bg-gradient-to-r from-red-600/10 to-transparent pointer-events-none"/>}
+                    </div>
+
+                    {/* TOOLS BUTTON */}
+                    <div onClick={() => { setViewState('TOOLS'); setActiveCourse(null); setActiveModule(null); setActiveLesson(null); }} 
+                        className={`relative overflow-hidden p-5 rounded-2xl border transition-all cursor-pointer group ${
+                            viewState === 'TOOLS'
+                                ? 'bg-gradient-to-br from-white/20 to-white/5 border-white/40 shadow-[0_0_20px_rgba(255,255,255,0.1)]' 
+                                : 'bg-gradient-to-br from-red-600 to-red-800 border-white/20 hover:border-white/40 hover:from-red-500 hover:to-red-700 shadow-[0_0_15px_rgba(234,42,51,0.2)]'
+                        }`}
+                    >
+                        <div className="flex items-center justify-between relative z-10">
+                            <div className="flex-1 min-w-0">
+                                <h3 className="text-sm font-black uppercase truncate text-white">HERRAMIENTAS</h3>
+                            </div>
+                            {viewState === 'TOOLS' && <ChevronRight size={18} className="text-white"/>}
+                        </div>
                     </div>
                 </div>
             )}
@@ -647,7 +647,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         <div className="p-4 border-t border-white/5 space-y-3">
             {isAdmin && (
                 <Link to="/admin" className="w-full py-4 rounded-xl text-xs font-black uppercase text-white bg-gradient-to-r from-red-600 to-red-900 hover:scale-[1.02] transition-transform shadow-lg shadow-red-900/30 flex items-center justify-center gap-2 border border-white/10">
-                    <Zap size={16} className="text-yellow-400 fill-yellow-400 animate-pulse"/> EZEH STUDIO
+                    <Settings size={16} className="text-white"/> EZEH STUDIO
                 </Link>
             )}
             <button onClick={onLogout} className="w-full py-3 bg-zinc-900 rounded-xl text-xs font-bold uppercase text-zinc-500 hover:text-white hover:bg-zinc-800 transition-all flex items-center justify-center gap-2">
@@ -724,7 +724,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                            <div 
                                key={course.id} 
                                onClick={() => handleCourseSelect(course)}
-                               className="group relative cursor-pointer flex flex-col pt-7 w-full transition-transform duration-300 hover:-translate-y-0.5"
+                               className="group relative cursor-pointer flex flex-col pt-7 w-[890px] transition-transform duration-300 hover:-translate-y-0.5"
                            >
                                {/* Floating Card carrying the Course Title and Module Count above the banner */}
                                <div className="absolute top-1 left-4.5 z-10 bg-[#0a0a0a]/95 border border-white/10 px-4 py-2 rounded-xl shadow-2xl flex items-center gap-3 transition-all group-hover:border-red-600/35 backdrop-blur-md">
@@ -736,8 +736,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                                    </span>
                                </div>
 
-                               {/* The 350px x 120px Banner storing ONLY the image */}
-                               <div className="w-full h-[150px] sm:h-[220px] md:h-[280px] lg:h-[350px] rounded-[1.5rem] overflow-hidden border border-white/5 bg-zinc-950 group-hover:border-red-600/40 transition-all shadow-xl relative flex-shrink-0">
+                               {/* The 890px x 200px Banner storing ONLY the image */}
+                               <div className="w-[890px] h-[200px] min-w-[890px] min-h-[200px] max-w-[890px] max-h-[200px] rounded-[1.5rem] overflow-hidden border border-white/5 bg-zinc-950 group-hover:border-red-600/40 transition-all shadow-xl relative flex-shrink-0">
                                    <img 
                                        src={getDirectImageUrl(course.thumbnail) || "https://picsum.photos/seed/course/800/450"}
                                        alt={course.title}
@@ -778,18 +778,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                                     >
                                         {savingNiche ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <><Plus size={16} /> Añadir Nicho</>}
                                     </button>
-                                </div>
-                                <div className="relative">
-                                    <textarea 
-                                        value={newNicheDescription}
-                                        onChange={(e) => setNewNicheDescription(e.target.value.slice(0, 200))}
-                                        placeholder="Breve descripción (máx 200 caracteres)..."
-                                        rows={2}
-                                        className="w-full bg-black border border-white/10 rounded-2xl py-4 px-6 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-red-600/50 transition-all shadow-2xl resize-none"
-                                    />
-                                    <div className="absolute bottom-4 right-4 text-[10px] text-zinc-600 font-bold">
-                                        {newNicheDescription.length}/200
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -865,12 +853,30 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                 </motion.div>
              )}
 
+             {/* === VIEW: TOOLS === */}
+             {viewState === 'TOOLS' && (
+                <motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} className="h-full flex flex-col items-center justify-center p-12">
+                     <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-white/10 flex items-center justify-center mb-6">
+                        <img src="https://i.imgur.com/KC6F9va.png" alt="Herramientas icon" referrerPolicy="no-referrer" className="w-8 h-8 object-contain" />
+                     </div>
+                     <h2 className="text-2xl font-black uppercase italic text-white tracking-widest mb-2">Herramientas</h2>
+                     <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">Próximamente disponibles</p>
+                </motion.div>
+             )}
+
              {/* === VIEW: COURSE OVERVIEW (SKEWED MODULE GRID) === */}
              {viewState === 'COURSE' && activeCourse && (
-                <motion.div initial={{opacity: 0, x: 20}} animate={{opacity: 1, x: 0}} className="min-h-full p-6 lg:p-12">
-                    
-                    {/* RESTORED TITLE */}
-                    <div className="mb-20 text-center relative z-10">
+                <motion.div initial={{opacity: 0, x: 20}} animate={{opacity: 1, x: 0}} className="min-h-full p-6 lg:p-12 relative">
+                     
+                     <button onClick={() => setViewState('COURSES')} className="absolute top-6 left-6 lg:top-12 lg:left-12 flex items-center gap-2 text-red-600 hover:text-red-500 transition-colors z-20 group">
+                         <div className="w-8 h-8 rounded-full bg-red-600/10 flex items-center justify-center group-hover:bg-red-600/20">
+                             <ChevronLeft size={18} />
+                         </div>
+                         <span className="text-xs font-black uppercase tracking-widest">Volver</span>
+                     </button>
+
+                     {/* RESTORED TITLE */}
+                     <div className="mb-20 text-center relative z-10 mt-16 lg:mt-0">
                          <h1 className="text-4xl md:text-6xl font-black tracking-tight uppercase italic">
                             {activeCourse.title.split(' ').map((word: string, i: number) => (
                                 <span key={i} className={word.toUpperCase().includes('YOUTUBE') ? "text-red-600" : "text-white"}>
@@ -922,109 +928,79 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                 </motion.div>
              )}
 
-             {/* === VIEW: MODULE LESSON FLOW (3D CAROUSEL) === */}
+             {/* === VIEW: MODULE LESSON FLOW (CATALOG) === */}
              {viewState === 'MODULE' && activeModule && activeModule.lessons && (
-                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full flex flex-col justify-between items-center py-12 px-4 relative overflow-hidden">
-                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-red-600/5 blur-[120px] pointer-events-none rounded-full"></div>
+                 <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="min-h-full p-6 lg:p-12 relative">
+                     <button onClick={() => setViewState('COURSE')} className="absolute top-6 left-6 lg:top-12 lg:left-12 flex items-center gap-2 text-red-600 hover:text-red-500 transition-colors z-20 group">
+                         <div className="w-8 h-8 rounded-full bg-red-600/10 flex items-center justify-center group-hover:bg-red-600/20">
+                             <ChevronLeft size={18} />
+                         </div>
+                         <span className="text-xs font-black uppercase tracking-widest">Volver</span>
+                     </button>
                      
-                     <header className="w-full max-w-7xl flex flex-col items-center z-10">
-                         {/* REMOVED BREADCRUMBS AS REQUESTED */}
-                         <h1 className="text-3xl md:text-5xl font-black tracking-tight text-center uppercase italic">SECCIÓN DE <span className="text-red-600">CLASES</span></h1>
+                     <header className="w-full max-w-7xl mx-auto flex flex-col items-center z-10 mb-16 mt-16 lg:mt-0">
+                         <h1 className="text-3xl md:text-5xl font-black tracking-tight text-center uppercase italic">CLASES DE <span className="text-red-600">{activeModule.title}</span></h1>
                      </header>
 
-                     {/* 3D CAROUSEL CONTAINER */}
-                     <div className="perspective-container w-full h-[60vh] flex items-center justify-center -mt-10">
-                         <div className="lesson-flow">
-                             {activeModule.lessons.map((lesson: any, idx: number) => {
-                                 const diff = idx - focusedLessonIdx;
-                                 let cardClass = 'card-hidden-right';
-                                 if (diff === 0) cardClass = 'card-center';
-                                 else if (diff === -1) cardClass = 'card-left';
-                                 else if (diff === 1) cardClass = 'card-right';
-                                 else if (diff < -1) cardClass = 'card-hidden-left';
+                     <div className="w-full max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                         {activeModule.lessons.map((lesson: any, idx: number) => {
+                             const isCompleted = completedLessons.has(lesson.id);
+                             const fallbackImage = "https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=1974&auto=format&fit=crop";
 
-                                 const isCompleted = completedLessons.has(lesson.id);
-
-                                 return (
-                                     <div 
-                                        key={lesson.id}
-                                        className={`lesson-card-3d group relative bg-[#0f0f0f] border ${diff === 0 ? 'border-white/10' : 'border-white/5'} rounded-xl overflow-hidden cursor-pointer ${cardClass}`}
-                                        onClick={() => {
-                                            if (diff === 0) selectLessonFromFlow();
-                                            else setFocusedLessonIdx(idx);
-                                        }}
-                                     >
-                                         <div className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" style={{ backgroundImage: `url("https://lh3.googleusercontent.com/aida-public/AB6AXuB_HbHRxFzmfmIRtKTXkWbcv0OVqKzhaZKuy1nXlyOSs9A5HsyxKJpmTTVNQLlU46AEJJXDXAATWj3YwV7Sr8Au2drVjCpwlicRC0BZyTLoq62dnRzD2U-gT3Vu772Nb3sB9-_rtXqpI0V-QAvJf73n84GabpCJIsl7_GjTqSiIylgA5ztDcT0HIiA50uEp21NrxpQuA28utjs2qWMN9w81YczGvDGEtilO-kwyz3xdYItCEaux8b4OOfdAiVE4AUdDjza8XQ1j9Ys")` }}></div>
-                                         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
-                                         
-                                         {/* PLAY BUTTON (Center Card Only) */}
-                                         {diff === 0 && (
-                                            <div className="absolute inset-0 flex items-center justify-center">
-                                                <div className="w-20 h-20 rounded-full bg-red-600/90 flex items-center justify-center play-glow group-hover:scale-110 transition-transform duration-300">
-                                                    <Play size={40} fill="white" className="text-white ml-1"/>
-                                                </div>
+                             return (
+                                 <div 
+                                    key={lesson.id}
+                                    className={`group relative bg-[#0f0f0f] border border-white/5 hover:border-white/20 rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.02]`}
+                                    onClick={() => {
+                                        setActiveLesson(lesson);
+                                        setViewState('PLAYER');
+                                    }}
+                                 >
+                                     <div className="aspect-video overflow-hidden relative">
+                                         <div className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" style={{ backgroundImage: `url("${lesson.thumbnail || fallbackImage}")` }}></div>
+                                         <div className="absolute inset-0 bg-gradient-to-t from-[#0f0f0f] via-black/20 to-transparent"></div>
+                                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                            <div className="w-16 h-16 rounded-full bg-red-600/90 flex items-center justify-center play-glow">
+                                                <Play size={28} fill="white" className="text-white ml-1"/>
                                             </div>
-                                         )}
-
-                                         <div className="absolute bottom-0 left-0 w-full p-8">
-                                             <div className="flex justify-between items-end mb-1">
-                                                <span className={`text-[10px] font-black tracking-widest uppercase block ${diff === 0 ? 'text-red-600' : 'text-zinc-500'}`}>
-                                                    Lección 0{idx + 1}
-                                                </span>
-                                                {isCompleted && <CheckSquare size={14} className="text-green-500 mb-1"/>}
-                                             </div>
-                                             <h3 className={`font-bold leading-tight ${diff === 0 ? 'text-2xl text-white' : 'text-xl text-zinc-400'}`}>{lesson.title}</h3>
                                          </div>
-                                         
-                                         {/* Progress Bar Line */}
-                                         <div className="absolute bottom-0 left-0 w-full h-1.5 bg-white/10">
-                                            <div className="red-gradient-bar h-full" style={{ width: isCompleted ? '100%' : '0%' }}></div>
+                                         <div className="absolute top-4 left-4 bg-black/80 backdrop-blur-md px-3 py-1 rounded border border-white/10 text-[9px] font-black tracking-widest uppercase text-zinc-300">
+                                             Clase 0{idx + 1}
                                          </div>
                                      </div>
-                                 );
-                             })}
-                             {activeModule.lessons.length === 0 && (
-                                 <div className="text-center text-zinc-500 font-bold uppercase tracking-widest">Este módulo aún no tiene lecciones.</div>
-                             )}
-                         </div>
+                                     <div className="p-6 relative bg-transparent">
+                                         <div className="flex justify-between items-start mb-4">
+                                            <h3 className="text-lg font-bold leading-tight text-zinc-100 group-hover:text-white line-clamp-2">{lesson.title}</h3>
+                                         </div>
+                                         
+                                         <div className="flex items-center justify-between">
+                                            <span className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${isCompleted ? 'text-green-500' : 'text-zinc-500'}`}>
+                                                {isCompleted ? <><CheckSquare size={14}/> Completada</> : 'Pendiente'}
+                                            </span>
+                                            {lesson.resources && <BookOpen size={14} className="text-zinc-500"/>}
+                                         </div>
+                                     </div>
+                                 </div>
+                             );
+                         })}
                      </div>
-
-                     <footer className="w-full max-w-7xl flex items-center justify-between pb-8 z-10 px-8">
-                         <div className="flex items-center gap-6">
-                             <button onClick={() => handleLessonFlowNav('prev')} className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5 transition-colors group">
-                                 <ChevronLeft className="text-zinc-400 group-hover:text-white"/>
-                             </button>
-                             <div className="flex flex-col text-center min-w-[100px]">
-                                 <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Progreso</span>
-                                 <span className="text-sm font-bold text-white">
-                                     {focusedLessonIdx + 1} / {activeModule.lessons.length}
-                                 </span>
-                             </div>
-                             <button onClick={() => handleLessonFlowNav('next')} className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5 transition-colors group">
-                                 <ChevronRight className="text-zinc-400 group-hover:text-white"/>
-                             </button>
-                         </div>
-                         
-                         <div className="flex items-center gap-8">
-                             <div className="flex items-center gap-3">
-                                 <div className="w-10 h-10 rounded-lg bg-zinc-900 border border-white/5 flex items-center justify-center">
-                                     <BookOpen className="text-red-600" size={18}/>
-                                 </div>
-                                 <div className="flex flex-col">
-                                     <span className="text-xs font-bold tracking-wider text-zinc-400 uppercase">Recursos</span>
-                                     <span className="text-[10px] text-zinc-600 uppercase">{activeModule.lessons[focusedLessonIdx]?.resources ? 'Disponibles' : 'No disponibles'}</span>
-                                 </div>
-                             </div>
-                             {/* REMOVED VER LECCION BUTTON AS REQUESTED */}
-                         </div>
-                     </footer>
+                     {activeModule.lessons.length === 0 && (
+                         <div className="w-full text-center py-20 text-zinc-500 font-bold uppercase tracking-widest">Este módulo aún no tiene lecciones.</div>
+                     )}
                  </motion.div>
               )}
 
               {/* === VIEW: PLAYER (CLASS) === */}
              {viewState === 'PLAYER' && activeLesson && (
-                <motion.div initial={{opacity: 0, x: 20}} animate={{opacity: 1, x: 0}} className="space-y-8 p-6 lg:p-12">
-                    <VideoRenderContainer videoUrl={resolvedVideoUrl} title={activeLesson.title} />
+                 <motion.div initial={{opacity: 0, x: 20}} animate={{opacity: 1, x: 0}} className="space-y-8 p-6 lg:p-12 relative pt-20 lg:pt-12">
+                     <button onClick={() => setViewState('MODULE')} className="absolute top-6 left-6 lg:top-12 lg:left-12 flex items-center gap-2 text-red-600 hover:text-red-500 transition-colors z-20 group">
+                         <div className="w-8 h-8 rounded-full bg-red-600/10 flex items-center justify-center group-hover:bg-red-600/20">
+                             <ChevronLeft size={18} />
+                         </div>
+                         <span className="text-xs font-black uppercase tracking-widest">Volver</span>
+                     </button>
+
+                     <VideoRenderContainer videoUrl={resolvedVideoUrl} title={activeLesson.title} />
 
                     <div className="space-y-6">
                         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-white/5 pb-6">
