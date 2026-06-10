@@ -76,9 +76,9 @@ app.post('/api/bunny-token', async (req: any, res: any) => {
     const expirationInSeconds = 3600; // 1 hour
     const expires = Math.floor(Date.now() / 1000) + expirationInSeconds;
     
-    // Bunny.net security token: md5( SecurityKey + VideoID + Expires )
+    // Bunny.net security token: sha256( SecurityKey + VideoID + Expires )
     const hashableString = tokenSecurityKey + videoId + expires;
-    const token = crypto.createHash('md5').update(hashableString).digest('hex');
+    const token = crypto.createHash('sha256').update(hashableString).digest('hex');
     
     const secureUrl = `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}?token=${token}&expires=${expires}`;
     
