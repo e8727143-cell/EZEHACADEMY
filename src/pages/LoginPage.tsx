@@ -174,11 +174,7 @@ const LoginPage: React.FC = () => {
           </div>
         </motion.div>
 
-        <div className="absolute bottom-10 left-0 right-0 px-20 flex justify-between items-center opacity-20">
-            <div className="h-px bg-white/50 flex-1 mx-4" />
-            <div className="text-[8px] font-bold text-white tracking-[0.5em] uppercase">Solo Acceso Privado</div>
-            <div className="h-px bg-white/50 flex-1 mx-4" />
-        </div>
+        {/* Banner with Solo Acceso Privado removed */}
       </div>
 
       {/* SECCIÓN DERECHA: FORMULARIO */}
@@ -191,9 +187,11 @@ const LoginPage: React.FC = () => {
           className="w-full max-w-md"
         >
           <div className="mb-16 text-center">
-            <p className="text-gray-400 text-sm font-black uppercase tracking-[0.3em]">
-              {isRegistering ? 'Crear nueva cuenta' : 'Acceso Estudiantes'}
-            </p>
+            {isRegistering && (
+              <p className="text-gray-400 text-sm font-black uppercase tracking-[0.3em]">
+                Crear nueva cuenta
+              </p>
+            )}
           </div>
 
           <AnimatePresence mode="wait">
@@ -305,13 +303,6 @@ const LoginPage: React.FC = () => {
             >
               {isRegistering ? '¿Ya eres miembro? Iniciar Sesión' : '¿Nuevo aquí? Crear cuenta gratuita'}
             </button>
-          </div>
-
-          <div className="mt-16 pt-8 border-t border-white/5 flex items-center justify-center opacity-50 group">
-            <div className="flex items-center gap-3 text-[10px] text-gray-400 uppercase font-black tracking-[0.3em]">
-              <ShieldCheck size={14} className="text-red-600" /> 
-              100% SEGURO
-            </div>
           </div>
         </motion.div>
       </div>

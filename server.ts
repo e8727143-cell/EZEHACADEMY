@@ -3,6 +3,7 @@ import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import { google } from 'googleapis';
+import crypto from 'crypto';
 
 dotenv.config();
 
@@ -50,6 +51,37 @@ function parseYoutubeUrl(url: string) {
     return null;
   }
 }
+
+// API Route: Generate Signed dynamic token URL for Bunny.net Stream video player
+app.post('/api/bunny-token', async (req: any, res: any) => {
+  const { libraryId, videoId } = req.body;
+
+  if (!libraryId || !videoId) {
+    return res.status(400).json({ error: 'libraryId and videoId are required' });
+  }
+
+  const tokenSecurityKey = process.env.BUNNY_SECURITY_KEY?.trim();
+  if (!tokenSecurityKey) {
+    console.error('BUNNY_SECURITY_KEY environment variable is not defined');
+    return res.status(500).json({ error: 'Server configuration error: Bunny.net tokenSecurityKey missing' });
+  }
+
+  try {
+    const expirationInSeconds = 3600; // 1 hour
+    const expires = Math.floor(Date.now() / 1000) + expirationInSeconds;
+    
+    // Bunny.net security token: md5( SecurityKey + VideoID + Expires )
+    const hashableString = tokenSecurityKey + videoId + expires;
+    const token = crypto.createHash('md5').update(hashableString).digest('hex');
+    
+    const secureUrl = `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}?token=${token}&expires=${expires}`;
+    
+    return res.json({ secureUrl });
+  } catch (error: any) {
+    console.error('Error generating secure Bunny URL:', error);
+    return res.status(500).json({ error: 'Failed to generate secure video session URL' });
+  }
+});
 
 // API Route: Get Channel Info
 app.get('/api/youtube/channel-info', async (req: any, res: any) => {

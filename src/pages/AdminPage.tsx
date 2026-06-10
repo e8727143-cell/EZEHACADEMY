@@ -310,14 +310,6 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
                   >
                       <ArrowLeft size={14}/> Área de Miembros
                   </Link>
-                  {/* STATUS INDICATOR (HEADER) */}
-                  <div className={`hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${statusColor}`}>
-                      <div className={`w-2 h-2 rounded-full ${statusDot} animate-pulse`}></div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider">{statusText}</span>
-                  </div>
-                  <button onClick={onLogout} className="p-2 text-zinc-500 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
-                      <LogOut size={18}/>
-                  </button>
               </div>
           </div>
       </header>

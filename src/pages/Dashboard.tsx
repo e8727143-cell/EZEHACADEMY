@@ -4,12 +4,13 @@ import {
   Play, FileText, ChevronDown, Lock, LogOut, Menu, X, Zap, ExternalLink, Home, 
   Check, Award, Star, Crown, ChevronRight, ChevronLeft,
   Shield, CheckSquare, Square, Download, ArrowLeft, Settings, BookOpen, Laptop,
-  Youtube, Plus, Trash2
+  Youtube, Plus, Trash2, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
 import { User, Niche } from '../types';
+import VideoRenderContainer from '../components/VideoRenderContainer';
 
 interface DashboardProps {
   user: User;
@@ -134,6 +135,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   
   // Rating State
   const [userRating, setUserRating] = useState<number>(0);
+  
+  // Bunny Stream Token States
+  const [bunnySignedUrl, setBunnySignedUrl] = useState<string>('');
+  const [loadingBunnyUrl, setLoadingBunnyUrl] = useState<boolean>(false);
   
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -436,6 +441,62 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     }
   };
 
+  // --- BUNNY STREAM CLIENT SIDE SIGNING ---
+  const activeLessonId = activeLesson?.id;
+  const activeVideoUrl = activeLesson?.video_url;
+
+  useEffect(() => {
+    if (!activeVideoUrl) {
+      setBunnySignedUrl('');
+      return;
+    }
+
+    const bunnyRegex = /iframe\.mediadelivery\.net\/embed\/(\d+)\/([a-zA-Z0-9-]+)/i;
+    const match = activeVideoUrl.match(bunnyRegex);
+    
+    if (match) {
+      const libraryId = match[1];
+      const videoId = match[2];
+      
+      setLoadingBunnyUrl(true);
+      setBunnySignedUrl('');
+      
+      fetch('/api/bunny-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ libraryId, videoId })
+      })
+        .then(res => {
+          if (!res.ok) throw new Error('Failed to sign Bunny token');
+          return res.json();
+        })
+        .then(data => {
+          if (data.secureUrl) {
+            setBunnySignedUrl(data.secureUrl);
+          } else {
+            setBunnySignedUrl(activeVideoUrl);
+          }
+        })
+        .catch(err => {
+          console.error('Error generating secure Bunny.net Stream URL:', err);
+          setBunnySignedUrl(activeVideoUrl);
+        })
+        .finally(() => {
+          setLoadingBunnyUrl(false);
+        });
+    } else {
+      setBunnySignedUrl('');
+    }
+  }, [activeLessonId, activeVideoUrl]);
+
+  const resolvedVideoUrl = useMemo(() => {
+    if (!activeVideoUrl) return '';
+    if (activeVideoUrl.includes('mediadelivery.net')) {
+      return bunnySignedUrl;
+    }
+    return getEmbedUrl(activeVideoUrl);
+  }, [activeVideoUrl, bunnySignedUrl]);
+
   // --- EMBED UTILS ---
   const getEmbedUrl = (url: string) => {
     if (!url) return '';
@@ -455,7 +516,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
   const isEmbeddable = (url: string) => {
     if (!url) return false;
-    return url.includes('drive.google.com') || url.includes('youtube.com') || url.includes('youtu.be') || url.includes('vimeo.com');
+    return url.includes('drive.google.com') || 
+           url.includes('youtube.com') || 
+           url.includes('youtu.be') || 
+           url.includes('vimeo.com') ||
+           url.includes('mediadelivery.net');
   };
 
   const getProgressBarStyles = (percent: number) => {
@@ -953,24 +1018,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                          </div>
                      </footer>
                  </motion.div>
-             )}
+              )}
 
-             {/* === VIEW: PLAYER (CLASS) === */}
+              {/* === VIEW: PLAYER (CLASS) === */}
              {viewState === 'PLAYER' && activeLesson && (
                 <motion.div initial={{opacity: 0, x: 20}} animate={{opacity: 1, x: 0}} className="space-y-8 p-6 lg:p-12">
-                    <div className="w-full aspect-video bg-black rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl relative group">
-                        {activeLesson.video_url ? (
-                            isEmbeddable(activeLesson.video_url) ? (
-                                <iframe src={getEmbedUrl(activeLesson.video_url)} className="w-full h-full" allowFullScreen title={activeLesson.title}/>
-                            ) : (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0a0a] p-8 text-center bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]">
-                                    <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mb-6 border border-white/10 shadow-[0_0_30px_rgba(0,0,0,0.5)]"><Play size={40} className="text-white/30 ml-2" /></div>
-                                    <h3 className="text-2xl font-black uppercase italic text-white mb-3 tracking-tight">Formato Externo</h3>
-                                    <a href={activeLesson.video_url} target="_blank" rel="noopener noreferrer" className="bg-red-600 hover:bg-red-700 text-white px-10 py-5 rounded-2xl font-black uppercase tracking-[0.2em] flex items-center gap-3 transition-all hover:scale-105 shadow-xl shadow-red-900/20"><ExternalLink size={20} /> Abrir Clase Externa</a>
-                                </div>
-                            )
-                        ) : <div className="absolute inset-0 flex items-center justify-center"><p className="text-zinc-700 font-black uppercase tracking-[0.5em] text-xs">Sin Video Asignado</p></div>}
-                    </div>
+                    <VideoRenderContainer videoUrl={resolvedVideoUrl} title={activeLesson.title} />
 
                     <div className="space-y-6">
                         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-white/5 pb-6">
