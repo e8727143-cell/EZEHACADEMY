@@ -451,7 +451,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       return;
     }
 
-    const bunnyRegex = /iframe\.mediadelivery\.net\/embed\/(\d+)\/([a-zA-Z0-9-]+)/i;
+    const bunnyRegex = /mediadelivery\.net\/(?:embed|play)\/(\d+)\/([a-zA-Z0-9-]+)/i;
     const match = activeVideoUrl.match(bunnyRegex);
     
     if (match) {
@@ -471,8 +471,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
           return res.json();
         })
         .then(data => {
-          if (data.secureUrl) {
-            setBunnySignedUrl(data.secureUrl);
+          const resolved = data.secureUrl || data.videoUrl;
+          if (resolved) {
+            setBunnySignedUrl(resolved);
           } else {
             setBunnySignedUrl(activeVideoUrl);
           }
@@ -492,7 +493,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const resolvedVideoUrl = useMemo(() => {
     if (!activeVideoUrl) return '';
     if (activeVideoUrl.includes('mediadelivery.net')) {
-      return bunnySignedUrl;
+      return bunnySignedUrl || activeVideoUrl;
     }
     return getEmbedUrl(activeVideoUrl);
   }, [activeVideoUrl, bunnySignedUrl]);

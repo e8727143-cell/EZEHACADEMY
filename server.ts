@@ -54,16 +54,22 @@ function parseYoutubeUrl(url: string) {
 
 // API Route: Generate Signed dynamic token URL for Bunny.net Stream video player
 app.post('/api/bunny-token', async (req: any, res: any) => {
-  const { libraryId, videoId } = req.body;
+  const { libraryId, videoId } = req.body || req.query;
 
   if (!libraryId || !videoId) {
-    return res.status(400).json({ error: 'libraryId and videoId are required' });
+    return res.status(400).json({ 
+      success: false,
+      error: 'libraryId and videoId are required' 
+    });
   }
 
   const tokenSecurityKey = process.env.BUNNY_SECURITY_KEY?.trim();
   if (!tokenSecurityKey) {
     console.error('BUNNY_SECURITY_KEY environment variable is not defined');
-    return res.status(500).json({ error: 'Server configuration error: Bunny.net tokenSecurityKey missing' });
+    return res.status(500).json({ 
+      success: false,
+      error: 'Server configuration error: Bunny.net tokenSecurityKey missing in environment.' 
+    });
   }
 
   try {
@@ -76,10 +82,17 @@ app.post('/api/bunny-token', async (req: any, res: any) => {
     
     const secureUrl = `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}?token=${token}&expires=${expires}`;
     
-    return res.json({ secureUrl });
+    return res.json({ 
+      success: true,
+      videoUrl: secureUrl,
+      secureUrl: secureUrl
+    });
   } catch (error: any) {
     console.error('Error generating secure Bunny URL:', error);
-    return res.status(500).json({ error: 'Failed to generate secure video session URL' });
+    return res.status(500).json({ 
+      success: false,
+      error: 'Failed to generate secure video session URL: ' + error.message 
+    });
   }
 });
 
