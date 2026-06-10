@@ -1,0 +1,127 @@
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import LoginPage from './pages/LoginPage';
+import Dashboard from './pages/Dashboard';
+import Admin from './pages/AdminPage';
+import UpdatePassword from './pages/UpdatePassword';
+import { User } from './types';
+import { supabase, ADMIN_EMAIL } from './lib/supabase';
+import { ShieldAlert, Home, Loader2 } from 'lucide-react';
+
+const App: React.FC = () => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // 1. Verificar sesión inicial
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        mapSupabaseUser(session.user);
+      } else {
+        setLoading(false);
+      }
+    });
+
+    // 2. Escuchar cambios de estado (Login, Logout, Auto-refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        mapSupabaseUser(session.user);
+      } else {
+        setUser(null);
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // 3. Tracking de actividad (Online Status)
+  useEffect(() => {
+    if (user) {
+      const channel = supabase.channel('online-users', {
+        config: { presence: { key: user.id } },
+      });
+
+      channel.subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({
+            user_id: user.id,
+            full_name: user.fullName,
+            online_at: new Date().toISOString(),
+          });
+        }
+      });
+
+      return () => { supabase.removeChannel(channel); };
+    }
+  }, [user?.id, user?.fullName]);
+
+  const mapSupabaseUser = (sbUser: any) => {
+    const isAdmin = sbUser.email === ADMIN_EMAIL;
+    setUser({
+      id: sbUser.id,
+      email: sbUser.email || '',
+      fullName: sbUser.user_metadata?.full_name || sbUser.email?.split('@')[0],
+      role: isAdmin ? 'admin' : 'student',
+      progress: [],
+    });
+    setLoading(false);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center gap-6">
+        <div className="relative w-20 h-20">
+          <div className="absolute inset-0 border-4 border-red-600/10 rounded-full" />
+          <div className="absolute inset-0 border-4 border-red-600 border-t-transparent rounded-full animate-spin shadow-[0_0_15px_rgba(239,68,68,0.5)]" />
+        </div>
+        <div className="text-center">
+          <p className="text-white font-black uppercase tracking-[0.5em] text-sm italic">EZEH ACADEMY</p>
+          <div className="flex items-center justify-center gap-2 mt-3">
+             <Loader2 size={12} className="animate-spin text-red-600" />
+             <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">Sincronizando acceso...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const AccessDenied = () => {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-20 h-20 bg-red-600/10 border border-red-600/20 rounded-full flex items-center justify-center mb-6">
+          <ShieldAlert size={40} className="text-red-600" />
+        </div>
+        <h1 className="text-3xl font-black mb-4 uppercase italic">ACCESO DENEGADO</h1>
+        <p className="text-gray-500 max-w-md mb-8 text-sm font-medium">
+          No tienes privilegios de administrador.
+        </p>
+        <a href="/" className="bg-white text-black px-8 py-4 rounded-2xl font-black uppercase text-xs hover:bg-red-600 hover:text-white transition-all inline-flex items-center">
+          <Home size={18} className="mr-2"/> Ir al Inicio
+        </a>
+      </div>
+    );
+  };
+
+  return (
+    <Router>
+      <Routes>
+        <Route path="/update-password" element={<UpdatePassword />} />
+        
+        <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
+        <Route path="/dashboard" element={user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/login" replace />} />
+        <Route path="/admin" element={user ? (user.role === 'admin' ? <Admin user={user} onLogout={handleLogout} /> : <AccessDenied />) : <Navigate to="/login" replace />} />
+        
+        <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Router>
+  );
+};
+
+export default App;
