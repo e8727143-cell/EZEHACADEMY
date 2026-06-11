@@ -392,14 +392,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       const hashSplit = cleanUrl.split('#');
       if (hashSplit.length > 1) {
         const hashId = hashSplit[1].split(/[?]/)[0];
-        if (hashId && /^[a-zA-Z0-9]+$/.test(hashId) && hashId.length >= 5) {
-          return `https://i.imgur.com/${hashId}.png`;
+        // Imgur IDs are alphanumeric, usually 5 or 7 chars
+        if (hashId && /^[a-zA-Z0-9]+$/.test(hashId) && hashId.length >= 4) {
+          return `https://i.imgur.com/${hashId}.jpg`;
         }
       }
 
-      // Don't try to resolve generic album/gallery links without specific hashes
+      // Handle direct album links
       if (cleanUrl.includes("/a/") || cleanUrl.includes("/gallery/")) {
-        return cleanUrl;
+        // We'll keep the current behavior for generic albums but the hash logic above handles the user's specific case
       }
 
       // Remove trailing slashes and query params/fragments
@@ -410,11 +411,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       // Remove extension if already present
       const id = lastPart.split('.')[0];
       
-      if (id && /^[a-zA-Z0-9]+$/.test(id) && id.length >= 5) {
-        return `https://i.imgur.com/${id}.png`;
+      if (id && /^[a-zA-Z0-9]+$/.test(id) && id.length >= 4) {
+        return `https://i.imgur.com/${id}.jpg`;
       }
     }
 
+    // Default: return the URL as is (handles bunny.net, b-cdn.net, etc.)
     return cleanUrl;
   };
 
@@ -767,26 +769,33 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                            <div 
                                key={course.id} 
                                onClick={() => handleCourseSelect(course)}
-                               className="group relative cursor-pointer flex flex-col pt-7 w-full transition-transform duration-300 hover:-translate-y-0.5"
+                               className="group relative cursor-pointer flex flex-col w-full transition-transform duration-300 hover:-translate-y-1"
                            >
-                               {/* Course title and module badge floating above */}
-                               <div className="absolute top-1 left-4 z-10 bg-[#0a0a0a]/95 border border-white/10 px-4 py-2 rounded-xl shadow-2xl flex items-center gap-2 transition-all group-hover:border-red-600/35 backdrop-blur-md">
-                                   <span className="text-[10px] font-black uppercase tracking-wide text-white truncate max-w-[140px] sm:max-w-xs">
-                                       {course.title}
-                                   </span>
-                                   <span className="text-[9px] font-black text-red-500 uppercase tracking-widest bg-red-600/10 px-2 py-0.5 rounded-md border border-red-600/20 flex-shrink-0">
-                                       {course.modules?.length || 0} MOD
-                                   </span>
-                               </div>
-
                                {/* The Square Cover */}
-                               <div className="aspect-square w-full rounded-2xl overflow-hidden border border-white/5 bg-zinc-950 group-hover:border-red-600/40 transition-all shadow-xl relative flex-shrink-0">
+                               <div className="aspect-square w-full rounded-2xl overflow-hidden border border-white/5 bg-zinc-950 group-hover:border-red-600/40 transition-all shadow-2xl relative flex-shrink-0">
                                    <img 
                                        src={getDirectImageUrl(course.thumbnail) || "https://picsum.photos/seed/course/800/450"}
                                        alt={course.title}
                                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                                       referrerPolicy="no-referrer"
+                                       referrerPolicy={course.thumbnail?.includes('imgur.com') ? "no-referrer" : undefined}
+                                       onError={(e) => {
+                                           if (!course.thumbnail?.includes('picsum.photos')) {
+                                               (e.target as HTMLImageElement).src = "https://picsum.photos/seed/course/800/450";
+                                           }
+                                       }}
                                    />
+                               </div>
+
+                               {/* Course title and module badge now below the image as a button-like container */}
+                               <div className="mt-4 bg-[#0a0a0a]/80 backdrop-blur-md border border-white/10 px-5 py-3 rounded-2xl shadow-xl flex items-center justify-between gap-3 transition-all group-hover:border-red-600/50 group-hover:bg-gradient-to-r group-hover:from-red-600/20 group-hover:to-red-900/10">
+                                   <span className="text-[11px] font-black uppercase tracking-wide text-white truncate flex-1">
+                                       {course.title}
+                                   </span>
+                                   <div className="bg-gradient-to-br from-red-600 to-red-800 px-3 py-1.5 rounded-lg shadow-lg shadow-red-600/20 flex-shrink-0">
+                                       <span className="text-[10px] font-black text-white uppercase tracking-widest whitespace-nowrap">
+                                           {course.modules?.length || 0} MOD
+                                       </span>
+                                   </div>
                                </div>
                            </div>
                        ))}

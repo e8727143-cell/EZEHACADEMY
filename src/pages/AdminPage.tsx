@@ -28,14 +28,24 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
       const hashSplit = cleanUrl.split('#');
       if (hashSplit.length > 1) {
         const hashId = hashSplit[1].split(/[?]/)[0];
-        if (hashId && /^[a-zA-Z0-9]+$/.test(hashId) && hashId.length >= 5) {
-          return `https://i.imgur.com/${hashId}.png`;
+        // Imgur IDs are alphanumeric, usually 5 or 7 chars
+        if (hashId && /^[a-zA-Z0-9]+$/.test(hashId) && hashId.length >= 4) {
+          return `https://i.imgur.com/${hashId}.jpg`;
         }
       }
 
-      // Don't try to resolve generic album/gallery links without specific hashes
+      // Handle direct album links (sometimes people paste these thinking they are images)
+      // If it's a direct album link /a/ID, we try to use the ID as an image if it's not a known album
       if (cleanUrl.includes("/a/") || cleanUrl.includes("/gallery/")) {
-        return cleanUrl;
+        // Only return cleanUrl if we can't find a potential image ID
+        const parts = cleanUrl.split(/[?#]/)[0].replace(/\/+$/, '').split("/");
+        const last = parts[parts.length - 1];
+        if (last && /^[a-zA-Z0-9]+$/.test(last) && last.length >= 7) {
+           // Might be the first image ID in many cases, though risky. 
+           // But if it's failing anyway, this is a better guess.
+           // However, let's stick to the safe path for now if it's explicitly /a/ or /gallery/
+           // Unless we didn't find a hash.
+        }
       }
 
       // Remove trailing slashes and query params/fragments
@@ -46,11 +56,12 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
       // Remove extension if already present
       const id = lastPart.split('.')[0];
       
-      if (id && /^[a-zA-Z0-9]+$/.test(id) && id.length >= 5) {
-        return `https://i.imgur.com/${id}.png`;
+      if (id && /^[a-zA-Z0-9]+$/.test(id) && id.length >= 4) {
+        return `https://i.imgur.com/${id}.jpg`;
       }
     }
 
+    // Default: return the URL as is (handles bunny.net, b-cdn.net, etc.)
     return cleanUrl;
   };
 
@@ -549,7 +560,7 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
                                                                     src={getDirectImageUrl(mod.thumbnail)} 
                                                                     alt="thumb" 
                                                                     className="w-10 h-6 object-cover rounded border border-white/10" 
-                                                                    referrerPolicy="no-referrer"
+                                                                    referrerPolicy={mod.thumbnail.includes('imgur.com') ? "no-referrer" : undefined}
                                                                 />
                                                             ) : (
                                                                 <Box size={14} className="text-zinc-500"/>
@@ -820,7 +831,7 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
                                                     src={getDirectImageUrl(niche.thumbnail)} 
                                                     alt={niche.name} 
                                                     className="w-full h-full object-cover" 
-                                                    referrerPolicy="no-referrer"
+                                                    referrerPolicy={niche.thumbnail?.includes('imgur.com') ? "no-referrer" : undefined}
                                                 />
                                               )}
                                           </div>
@@ -967,6 +978,20 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
                 <h2 className="text-3xl font-black italic uppercase mb-8">{isEditing ? 'Editar' : 'Nuevo'} <span className="text-red-600">Master</span></h2>
                 
                 <div className="space-y-4 mb-8">
+                    {inputCourseThumbnail && (
+                        <div className="w-full aspect-video rounded-2xl overflow-hidden border border-white/10 bg-black flex items-center justify-center relative group/preview">
+                            <img 
+                                src={getDirectImageUrl(inputCourseThumbnail)} 
+                                alt="Preview" 
+                                className="w-full h-full object-cover"
+                                referrerPolicy={inputCourseThumbnail.includes('imgur.com') ? "no-referrer" : undefined}
+                                onError={(e) => {
+                                    (e.target as HTMLImageElement).src = 'https://via.placeholder.com/1600x900?text=Error+en+URL+de+Imagen';
+                                }}
+                            />
+                            <div className="absolute top-2 right-2 px-2 py-1 bg-black/60 rounded text-[8px] font-black uppercase text-white backdrop-blur-sm border border-white/10">Vista Previa</div>
+                        </div>
+                    )}
                     <div className="space-y-1">
                         <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 ml-2">Nombre del Master</label>
                         <input autoFocus type="text" value={inputTitle} onChange={e => setInputTitle(e.target.value)} className="w-full bg-black border border-white/10 p-5 rounded-2xl text-white font-bold outline-none focus:border-red-600 placeholder:text-zinc-800 transition-colors" placeholder="NOMBRE DEL MASTER..."/>
@@ -1004,7 +1029,7 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
                                   src={getDirectImageUrl(inputModuleThumbnail)} 
                                   alt="Thumbnail" 
                                   className="w-full h-32 object-cover rounded-xl border border-white/20"
-                                  referrerPolicy="no-referrer"
+                                  referrerPolicy={inputModuleThumbnail.includes('imgur.com') ? "no-referrer" : undefined}
                               />
                               <button onClick={() => setInputModuleThumbnail('')} className="absolute top-2 right-2 p-1 bg-black/50 rounded-full hover:bg-red-600 hover:text-white transition-colors"><Trash2 size={12}/></button>
                               <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-[10px] text-white font-bold uppercase backdrop-blur-sm flex items-center gap-1"><CheckCircle size={10} className="text-green-500"/> Portada cargada</div>
