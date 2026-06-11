@@ -23,6 +23,8 @@ drop policy if exists "Admin has full access on lessons" on public.lessons;
 drop policy if exists "Active students can view lessons" on public.lessons;
 drop policy if exists "Admin has full access on niches" on public.niches;
 drop policy if exists "Active students can view niches" on public.niches;
+drop policy if exists "Admin has full access on extensions" on public.extensions;
+drop policy if exists "Active students can view extensions" on public.extensions;
 
 drop policy if exists "Profiles are readable by owner and admin" on public.profiles;
 drop policy if exists "Profiles updateable by owner or admin" on public.profiles;
@@ -194,6 +196,23 @@ create table if not exists public.niches (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- J. Tools Table
+create table if not exists public.tools (
+  id uuid default gen_random_uuid() primary key,
+  name text not null,
+  url text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- K. Extensions Table
+create table if not exists public.extensions (
+  id uuid default gen_random_uuid() primary key,
+  name text not null,
+  url text not null,
+  description text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
 
 -- -------------------------------------------------------------------------
 -- 2. AUTOMATION: PROCEDURES, TRIGGERS, AND METRIC HOOKS
@@ -298,6 +317,8 @@ alter table public.user_progress enable row level security;
 alter table public.lesson_ratings enable row level security;
 alter table public.enrollments enable row level security;
 alter table public.niches enable row level security;
+alter table public.tools enable row level security;
+alter table public.extensions enable row level security;
 alter table public.historial_accesos enable row level security;
 
 -- B. Profiles Policies
@@ -422,7 +443,39 @@ using (
   or (auth.jwt() ->> 'email' = 'ezehcontactooficial@gmail.com')
 );
 
--- J. Access Audit History Policies
+-- J. Tools Policies
+create policy "Admin has full access on tools"
+on public.tools for all to authenticated
+using (auth.jwt() ->> 'email' = 'ezehcontactooficial@gmail.com')
+with check (auth.jwt() ->> 'email' = 'ezehcontactooficial@gmail.com');
+
+create policy "Active students can view tools"
+on public.tools for select to authenticated
+using (
+  exists (
+    select 1 from public.profiles
+    where profiles.id = auth.uid() and profiles.estado_suscripcion = 'activo'
+  )
+  or (auth.jwt() ->> 'email' = 'ezehcontactooficial@gmail.com')
+);
+
+-- K. Extensions Policies
+create policy "Admin has full access on extensions"
+on public.extensions for all to authenticated
+using (auth.jwt() ->> 'email' = 'ezehcontactooficial@gmail.com')
+with check (auth.jwt() ->> 'email' = 'ezehcontactooficial@gmail.com');
+
+create policy "Active students can view extensions"
+on public.extensions for select to authenticated
+using (
+  exists (
+    select 1 from public.profiles
+    where profiles.id = auth.uid() and profiles.estado_suscripcion = 'activo'
+  )
+  or (auth.jwt() ->> 'email' = 'ezehcontactooficial@gmail.com')
+);
+
+-- L. Access Audit History Policies
 create policy "Admin can view all access histories"
 on public.historial_accesos for select to authenticated
 using (auth.jwt() ->> 'email' = 'ezehcontactooficial@gmail.com');

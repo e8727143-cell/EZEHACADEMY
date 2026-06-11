@@ -52,3 +52,18 @@ export interface Niche {
   view_count?: string;
   created_at?: string;
 }
+
+export interface Tool {
+  id: string;
+  name: string;
+  url: string;
+  created_at?: string;
+}
+
+export interface Extension {
+  id: string;
+  name: string;
+  url: string;
+  description: string;
+  created_at?: string;
+}

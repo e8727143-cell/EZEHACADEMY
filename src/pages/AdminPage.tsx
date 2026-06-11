@@ -6,25 +6,47 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase, ADMIN_EMAIL } from '../lib/supabase';
 import { Link } from 'react-router-dom';
-import { User } from '../types';
+import { User, Niche, Tool, Extension } from '../types';
 
-type AdminView = 'CONTENT' | 'USERS';
+type AdminView = 'CONTENT' | 'USERS' | 'RESOURCES';
 
 const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => {
   const getDirectImageUrl = (url: string | null | undefined): string => {
     if (!url) return "";
     let cleanUrl = url.trim();
     
+    // Ensure protocol
     if (!/^https?:\/\//i.test(cleanUrl)) {
       if (cleanUrl.toLowerCase().includes("imgur.com")) {
         cleanUrl = "https://" + cleanUrl;
       }
     }
 
+    // Handle Imgur
     if (cleanUrl.includes("imgur.com") && !cleanUrl.includes("i.imgur.com")) {
-      const parts = cleanUrl.split("/");
-      const id = parts[parts.length - 1].split(/[?#]/)[0];
-      if (id && /^[a-zA-Z0-9]+$/.test(id)) {
+      // Priority: Check for hash fragment (common in albums/galleries to point to a specific image)
+      const hashSplit = cleanUrl.split('#');
+      if (hashSplit.length > 1) {
+        const hashId = hashSplit[1].split(/[?]/)[0];
+        if (hashId && /^[a-zA-Z0-9]+$/.test(hashId) && hashId.length >= 5) {
+          return `https://i.imgur.com/${hashId}.png`;
+        }
+      }
+
+      // Don't try to resolve generic album/gallery links without specific hashes
+      if (cleanUrl.includes("/a/") || cleanUrl.includes("/gallery/")) {
+        return cleanUrl;
+      }
+
+      // Remove trailing slashes and query params/fragments
+      const nakedUrl = cleanUrl.split(/[?#]/)[0].replace(/\/+$/, '');
+      const parts = nakedUrl.split("/");
+      const lastPart = parts[parts.length - 1];
+      
+      // Remove extension if already present
+      const id = lastPart.split('.')[0];
+      
+      if (id && /^[a-zA-Z0-9]+$/.test(id) && id.length >= 5) {
         return `https://i.imgur.com/${id}.png`;
       }
     }
@@ -55,9 +77,27 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set()); // Track specific online IDs
   const [totalLessonsCount, setTotalLessonsCount] = useState(0);
 
+  // --- STATE: RESOURCES MANAGEMENT ---
+  const [niches, setNiches] = useState<Niche[]>([]);
+  const [tools, setTools] = useState<Tool[]>([]);
+  const [extensions, setExtensions] = useState<Extension[]>([]);
+  
+  const [newNicheUrl, setNewNicheUrl] = useState('');
+  const [savingNiche, setSavingNiche] = useState(false);
+  
+  const [newToolName, setNewToolName] = useState('');
+  const [newToolUrl, setNewToolUrl] = useState('');
+  const [savingTool, setSavingTool] = useState(false);
+  
+  const [newExtensionName, setNewExtensionName] = useState('');
+  const [newExtensionUrl, setNewExtensionUrl] = useState('');
+  const [newExtensionDesc, setNewExtensionDesc] = useState('');
+  const [savingExtension, setSavingExtension] = useState(false);
+
   useEffect(() => {
     fetchContentData();
     fetchUserData();
+    fetchResources();
     setupRealtimePresence();
   }, []);
 
@@ -110,6 +150,31 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
     } else {
         if(error) console.error("Error fetching profiles:", error);
         setUsersList([]);
+    }
+  }
+
+  async function fetchResources() {
+    try {
+      // Auto-cleanup niches older than 30 days
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      await supabase
+        .from('niches')
+        .delete()
+        .lt('created_at', thirtyDaysAgo.toISOString());
+
+      const [nRes, tRes, eRes] = await Promise.all([
+        supabase.from('niches').select('*').order('created_at', { ascending: false }),
+        supabase.from('tools').select('*').order('created_at', { ascending: false }),
+        supabase.from('extensions').select('*').order('created_at', { ascending: false })
+      ]);
+      
+      if (nRes.data) setNiches(nRes.data);
+      if (tRes.data) setTools(tRes.data);
+      if (eRes.data) setExtensions(eRes.data);
+    } catch (err) {
+      console.error("Error fetching resources:", err);
     }
   }
 
@@ -199,12 +264,116 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
     else alert(error.message);
   };
 
-  const handleDelete = async (table: 'courses'|'modules'|'lessons', id: string) => {
+  const handleDelete = async (table: 'courses'|'modules'|'lessons'|'niches'|'tools'|'extensions', id: string) => {
     if (!window.confirm("¿Confirmar eliminación?")) return;
     const { error } = await supabase.from(table).delete().eq('id', id);
-    if (!error) { fetchContentData(); showNotify('success', 'ELIMINADO'); } 
+    if (!error) { 
+        if (table === 'niches') setNiches(prev => prev.filter(n => n.id !== id));
+        else if (table === 'tools') setTools(prev => prev.filter(t => t.id !== id));
+        else if (table === 'extensions') setExtensions(prev => prev.filter(e => e.id !== id));
+        else fetchContentData(); 
+        showNotify('success', 'ELIMINADO'); 
+    } 
     else alert(error.message);
   };
+
+  // --- 3. RESOURCES MANAGEMENT LOGIC ---
+  async function addNiche() {
+    if (!newNicheUrl.trim()) return;
+    setSavingNiche(true);
+    try {
+      let name = "Canal de YouTube";
+      let thumbnail = null;
+      let subscriberCount = null;
+      let videoCount = null;
+      let popularVideo = null;
+
+      try {
+        const baseUrl = window.location.origin;
+        const response = await fetch(`${baseUrl}/api/youtube/channel-info?url=${encodeURIComponent(newNicheUrl.trim())}`);
+        if (response.ok) {
+           const channelData = await response.json();
+           name = channelData.title || name;
+           thumbnail = channelData.thumbnail || null;
+           subscriberCount = channelData.subscriberCount || null;
+           videoCount = channelData.videoCount || null;
+           if (channelData.popularVideo) {
+               popularVideo = JSON.stringify(channelData.popularVideo);
+           }
+        }
+      } catch (e) {
+          console.log("Could not fetch channel info", e);
+      }
+
+      const { data, error } = await supabase
+        .from('niches')
+        .insert([{ 
+            url: newNicheUrl.trim(), 
+            name: name,
+            thumbnail: thumbnail,
+            subscriber_count: subscriberCount,
+            video_count: videoCount,
+            description: popularVideo
+        }])
+        .select();
+      
+      if (error) throw error;
+      if (data) setNiches([data[0], ...niches]);
+      setNewNicheUrl('');
+      showNotify('success', 'NICHO AÑADIDO');
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSavingNiche(false);
+    }
+  }
+
+  async function addTool() {
+    if (!newToolName.trim() || !newToolUrl.trim()) return;
+    setSavingTool(true);
+    try {
+      const { data, error } = await supabase
+        .from('tools')
+        .insert([{ name: newToolName.trim(), url: newToolUrl.trim() }])
+        .select();
+      
+      if (error) throw error;
+      if (data) setTools([data[0], ...tools]);
+      setNewToolName('');
+      setNewToolUrl('');
+      showNotify('success', 'HERRAMIENTA AÑADIDA');
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSavingTool(false);
+    }
+  }
+
+  async function addExtension() {
+    if (!newExtensionName.trim() || !newExtensionUrl.trim()) return;
+    setSavingExtension(true);
+    try {
+      const { data, error } = await supabase
+        .from('extensions')
+        .insert([{ 
+            name: newExtensionName.trim(),
+            url: newExtensionUrl.trim(),
+            description: newExtensionDesc.trim() || null
+        }])
+        .select();
+      
+      if (error) throw error;
+      if (data) setExtensions([data[0], ...extensions]);
+      setNewExtensionName('');
+      setNewExtensionUrl('');
+      setNewExtensionDesc('');
+      showNotify('success', 'EXTENSIÓN AÑADIDA');
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSavingExtension(false);
+    }
+  }
 
   // --- HELPERS ---
   const openCreateCourse = () => { setModalType('COURSE'); setIsEditing(false); setInputTitle(''); setInputCourseThumbnail(''); };
@@ -300,6 +469,12 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
                       >
                         <Users size={14}/> User Intelligence
                       </button>
+                      <button 
+                        onClick={() => setCurrentView('RESOURCES')}
+                        className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${currentView === 'RESOURCES' ? 'bg-white text-black shadow-[0_0_15px_rgba(255,255,255,0.2)]' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}
+                      >
+                        <Box size={14}/> Resources
+                      </button>
                   </nav>
               </div>
 
@@ -370,7 +545,12 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
                                                     <div className="p-4 flex justify-between items-center bg-white/5 border-b border-white/5">
                                                         <div className="flex items-center gap-3">
                                                             {mod.thumbnail ? (
-                                                                <img src={getDirectImageUrl(mod.thumbnail)} alt="thumb" className="w-10 h-6 object-cover rounded border border-white/10" />
+                                                                <img 
+                                                                    src={getDirectImageUrl(mod.thumbnail)} 
+                                                                    alt="thumb" 
+                                                                    className="w-10 h-6 object-cover rounded border border-white/10" 
+                                                                    referrerPolicy="no-referrer"
+                                                                />
                                                             ) : (
                                                                 <Box size={14} className="text-zinc-500"/>
                                                             )}
@@ -599,6 +779,184 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
               </motion.div>
           )}
 
+          {/* ================= VIEW: RESOURCES MANAGER ================= */}
+          {currentView === 'RESOURCES' && (
+              <motion.div initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}} className="space-y-12">
+                  
+                  {/* GESTIÓN DE NICHOS */}
+                  <section className="space-y-6">
+                      <div className="flex justify-between items-end">
+                          <div>
+                              <h2 className="text-3xl font-black text-white mb-2 uppercase">GESTIÓN DE NICHOS</h2>
+                              <p className="text-zinc-500 text-sm font-medium">Añade canales de YouTube para la sección de nichos ganadores.</p>
+                          </div>
+                      </div>
+                      
+                      <div className="bg-[#0a0a0a] border border-white/10 rounded-[2rem] p-8 space-y-6">
+                          <div className="flex gap-4">
+                              <input 
+                                  type="text" 
+                                  value={newNicheUrl} 
+                                  onChange={e => setNewNicheUrl(e.target.value)} 
+                                  placeholder="URL del canal de YouTube..."
+                                  className="flex-1 bg-black border border-white/10 rounded-xl px-6 py-4 text-sm font-bold text-white focus:border-red-600 outline-none transition-colors"
+                              />
+                              <button 
+                                  onClick={addNiche}
+                                  disabled={savingNiche || !newNicheUrl.trim()}
+                                  className="px-8 bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-xl font-black uppercase text-xs transition-all flex items-center gap-2"
+                              >
+                                  {savingNiche ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} AÑADIR NICHO
+                              </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {niches.map(niche => (
+                                  <div key={niche.id} className="p-4 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-between group">
+                                      <div className="flex items-center gap-3 overflow-hidden">
+                                          <div className="w-10 h-10 rounded-full bg-zinc-800 flex-shrink-0 overflow-hidden border border-white/10">
+                                              {niche.thumbnail && (
+                                                <img 
+                                                    src={getDirectImageUrl(niche.thumbnail)} 
+                                                    alt={niche.name} 
+                                                    className="w-full h-full object-cover" 
+                                                    referrerPolicy="no-referrer"
+                                                />
+                                              )}
+                                          </div>
+                                          <div className="truncate">
+                                              <p className="text-sm font-bold text-white truncate">{niche.name}</p>
+                                              <div className="flex items-center gap-2">
+                                                  <p className="text-[10px] text-zinc-500 truncate max-w-[120px]">{niche.url}</p>
+                                                  {niche.created_at && (
+                                                      <span className="text-[9px] font-black bg-white/10 text-white px-2 py-0.5 rounded-full uppercase tracking-tighter">
+                                                          {(() => {
+                                                              const createdDate = new Date(niche.created_at);
+                                                              const expiryDate = new Date(createdDate);
+                                                              expiryDate.setDate(expiryDate.getDate() + 30);
+                                                              const now = new Date();
+                                                              const diffTime = expiryDate.getTime() - now.getTime();
+                                                              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                                              return diffDays > 0 ? `${diffDays} DÍAS RESTANTES` : 'EXPIRA HOY';
+                                                          })()}
+                                                      </span>
+                                                  )}
+                                              </div>
+                                          </div>
+                                      </div>
+                                      <button onClick={() => handleDelete('niches', niche.id)} className="text-zinc-600 hover:text-red-500 p-2"><Trash2 size={16}/></button>
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+                  </section>
+
+                  {/* GESTIÓN DE HERRAMIENTAS */}
+                  <section className="space-y-6">
+                      <div className="flex justify-between items-end">
+                          <div>
+                              <h2 className="text-3xl font-black text-white mb-2 uppercase">GESTIÓN DE HERRAMIENTAS</h2>
+                              <p className="text-zinc-500 text-sm font-medium">Administra los enlaces externos y recursos para alumnos.</p>
+                          </div>
+                      </div>
+
+                      <div className="bg-[#0a0a0a] border border-white/10 rounded-[2rem] p-8 space-y-6">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <input 
+                                  type="text" 
+                                  value={newToolName} 
+                                  onChange={e => setNewToolName(e.target.value)} 
+                                  placeholder="Nombre de la herramienta..."
+                                  className="flex-1 bg-black border border-white/10 rounded-xl px-6 py-4 text-sm font-bold text-white focus:border-red-600 outline-none transition-colors"
+                              />
+                               <input 
+                                  type="text" 
+                                  value={newToolUrl} 
+                                  onChange={e => setNewToolUrl(e.target.value)} 
+                                  placeholder="URL (Link)..."
+                                  className="flex-1 bg-black border border-white/10 rounded-xl px-6 py-4 text-sm font-bold text-white focus:border-red-600 outline-none transition-colors"
+                              />
+                          </div>
+                          <button 
+                              onClick={addTool}
+                              disabled={savingTool || !newToolName.trim() || !newToolUrl.trim()}
+                              className="w-full py-4 bg-white text-black hover:bg-zinc-200 disabled:opacity-50 rounded-xl font-black uppercase text-xs transition-all flex items-center justify-center gap-2"
+                          >
+                              {savingTool ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} AÑADIR HERRAMIENTA
+                          </button>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {tools.map(tool => (
+                                  <div key={tool.id} className="p-4 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-between">
+                                      <div className="truncate">
+                                          <p className="text-sm font-bold text-white">{tool.name}</p>
+                                          <p className="text-[10px] text-zinc-500 truncate">{tool.url}</p>
+                                      </div>
+                                      <button onClick={() => handleDelete('tools', tool.id)} className="text-zinc-600 hover:text-red-500 p-2"><Trash2 size={16}/></button>
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+                  </section>
+
+                   {/* GESTIÓN DE EXTENSIONES */}
+                   <section className="space-y-6">
+                      <div className="flex justify-between items-end">
+                          <div>
+                              <h2 className="text-3xl font-black text-white mb-2 uppercase">GESTIÓN DE EXTENSIONES</h2>
+                              <p className="text-zinc-500 text-sm font-medium">Sube y gestiona las herramientas de Bunny.net.</p>
+                          </div>
+                      </div>
+
+                      <div className="bg-[#0a0a0a] border border-white/10 rounded-[2rem] p-8 space-y-6">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <input 
+                                  type="text" 
+                                  value={newExtensionName} 
+                                  onChange={e => setNewExtensionName(e.target.value)} 
+                                  placeholder="Nombre de la extensión..."
+                                  className="flex-1 bg-black border border-white/10 rounded-xl px-6 py-4 text-sm font-bold text-white focus:border-red-600 outline-none transition-colors"
+                              />
+                               <input 
+                                  type="text" 
+                                  value={newExtensionUrl} 
+                                  onChange={e => setNewExtensionUrl(e.target.value)} 
+                                  placeholder="URL (Bunny.net link)..."
+                                  className="flex-1 bg-black border border-white/10 rounded-xl px-6 py-4 text-sm font-bold text-white focus:border-red-600 outline-none transition-colors"
+                              />
+                          </div>
+                          <textarea 
+                                value={newExtensionDesc}
+                                onChange={e => setNewExtensionDesc(e.target.value)}
+                                placeholder="Descripción corta..."
+                                rows={2}
+                                className="w-full bg-black border border-white/10 rounded-xl px-6 py-4 text-sm font-bold text-white focus:border-red-600 outline-none transition-colors resize-none"
+                          />
+                          <button 
+                              onClick={addExtension}
+                              disabled={savingExtension || !newExtensionName.trim() || !newExtensionUrl.trim()}
+                              className="w-full py-4 bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-xl font-black uppercase text-xs transition-all flex items-center justify-center gap-2"
+                          >
+                              {savingExtension ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} AÑADIR EXTENSIÓN
+                          </button>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {extensions.map(ext => (
+                                  <div key={ext.id} className="p-4 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-between">
+                                      <div className="truncate">
+                                          <p className="text-sm font-bold text-white">{ext.name}</p>
+                                          <p className="text-[10px] text-zinc-500 truncate">{ext.url}</p>
+                                      </div>
+                                      <button onClick={() => handleDelete('extensions', ext.id)} className="text-zinc-600 hover:text-red-500 p-2"><Trash2 size={16}/></button>
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+                  </section>
+
+              </motion.div>
+          )}
+
       </main>
 
       {/* --- MODALS (Reused Logic) --- */}
@@ -642,7 +1000,12 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
                           </div>
                       ) : inputModuleThumbnail ? (
                           <div className="w-full relative group/img">
-                              <img src={inputModuleThumbnail} alt="Thumbnail" className="w-full h-32 object-cover rounded-xl border border-white/20"/>
+                              <img 
+                                  src={getDirectImageUrl(inputModuleThumbnail)} 
+                                  alt="Thumbnail" 
+                                  className="w-full h-32 object-cover rounded-xl border border-white/20"
+                                  referrerPolicy="no-referrer"
+                              />
                               <button onClick={() => setInputModuleThumbnail('')} className="absolute top-2 right-2 p-1 bg-black/50 rounded-full hover:bg-red-600 hover:text-white transition-colors"><Trash2 size={12}/></button>
                               <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-[10px] text-white font-bold uppercase backdrop-blur-sm flex items-center gap-1"><CheckCircle size={10} className="text-green-500"/> Portada cargada</div>
                           </div>

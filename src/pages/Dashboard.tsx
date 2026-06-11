@@ -4,12 +4,12 @@ import {
   Play, FileText, ChevronDown, Lock, LogOut, Menu, X, Zap, ExternalLink, Home, 
   Check, Award, Star, Crown, ChevronRight, ChevronLeft,
   Shield, CheckSquare, Square, Download, ArrowLeft, Settings, BookOpen, Laptop,
-  Youtube, Plus, Trash2, Loader2
+  Youtube, Plus, Trash2, Loader2, Folder
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
-import { User, Niche } from '../types';
+import { User, Niche, Tool, Extension } from '../types';
 import VideoRenderContainer from '../components/VideoRenderContainer';
 
 interface DashboardProps {
@@ -18,10 +18,20 @@ interface DashboardProps {
 }
 
 type Rank = "Novato" | "Creador" | "Maestro";
-type ViewState = 'HOME' | 'COURSE' | 'MODULE' | 'PLAYER' | 'NICHES' | 'COURSES' | 'TOOLS';
+type ViewState = 'HOME' | 'COURSE' | 'MODULE' | 'PLAYER' | 'NICHES' | 'COURSES' | 'TOOLS' | 'EXTENSIONS';
 
 // --- CUSTOM STYLES ---
 const CUSTOM_STYLES = `
+  @keyframes gradient-slow {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+  }
+  .animate-gradient-slow {
+      background-size: 200% 200%;
+      animation: gradient-slow 8s linear infinite;
+  }
+
   /* SKEWED GRID (COURSE VIEW) */
   .skewed-grid {
       transform: perspective(1000px) rotateX(4deg) rotateY(-8deg);
@@ -120,9 +130,9 @@ const MODULE_IMAGES = [
 const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [courses, setCourses] = useState<any[]>([]);
   const [niches, setNiches] = useState<Niche[]>([]);
-  const [newNicheUrl, setNewNicheUrl] = useState('');
+  const [tools, setTools] = useState<Tool[]>([]);
+  const [extensions, setExtensions] = useState<Extension[]>([]);
   const [isNichesOpen, setIsNichesOpen] = useState(false);
-  const [savingNiche, setSavingNiche] = useState(false);
   const [completedLessons, setCompletedLessons] = useState<Set<string>>(new Set());
 
   // Navigation State
@@ -131,6 +141,26 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [activeModule, setActiveModule] = useState<any>(null); // NEW: Track selected module
   const [activeLesson, setActiveLesson] = useState<any>(null);
   const [focusedLessonIdx, setFocusedLessonIdx] = useState(0); // NEW: For 3D Carousel
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [isHeaderHovered, setIsHeaderHovered] = useState(false);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+        try {
+            const dataStr = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
+            const lowerData = dataStr.toLowerCase();
+            if (lowerData.includes('play') && !lowerData.includes('pause')) {
+                 setIsVideoPlaying(true);
+            } else if (lowerData.includes('pause')) {
+                 setIsVideoPlaying(false);
+            }
+        } catch (e) {
+            // ignore
+        }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
   
   // Rating State
   const [userRating, setUserRating] = useState<number>(0);
@@ -148,7 +178,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      await Promise.all([fetchCourses(), fetchProgress(), fetchNiches()]);
+      await Promise.all([fetchCourses(), fetchProgress(), fetchNiches(), fetchTools(), fetchExtensions()]);
       setLoading(false);
     };
     init();
@@ -180,9 +210,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
   async function fetchNiches() {
     try {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
       const { data, error } = await supabase
         .from('niches')
         .select('*')
+        .gt('created_at', thirtyDaysAgo.toISOString())
         .order('created_at', { ascending: false });
       if (error) throw error;
       setNiches(data || []);
@@ -191,67 +225,29 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     }
   }
 
-  async function addNiche() {
-    if (!newNicheUrl.trim()) return;
-    setSavingNiche(true);
+  async function fetchTools() {
     try {
-      // Extract name from URL
-      let name = "Canal de YouTube";
-      try {
-          const urlObj = new URL(newNicheUrl);
-          const path = urlObj.pathname;
-          if (path.includes('/@')) {
-              const handle = path.split('/@')[1].split('/')[0];
-              name = `@${handle}`;
-          } else if (path.includes('/c/') || path.includes('/user/')) {
-              const parts = path.split('/').filter(p => p.length > 0);
-              name = parts[parts.length - 1];
-          } else if (path.includes('/channel/')) {
-               const parts = path.split('/').filter(p => p.length > 0);
-               name = parts[parts.length - 1];
-          }
-      } catch (e) {
-          console.log("Could not extract name from URL, using default");
-      }
-
-      // Save to Supabase
       const { data, error } = await supabase
-        .from('niches')
-        .insert([{ 
-            url: newNicheUrl.trim(), 
-            name: name,
-            thumbnail: null, // No thumbnail without API
-            subscriber_count: null,
-            video_count: null,
-            view_count: null
-        }])
-        .select();
-      
+        .from('tools')
+        .select('*')
+        .order('created_at', { ascending: false });
       if (error) throw error;
-      
-      if (data && data[0]) {
-        setNiches([data[0], ...niches]);
-      }
-      setNewNicheUrl('');
-    } catch (err: any) {
-      console.error('Error adding niche:', err);
-      alert(`Error: ${err.message}`);
-    } finally {
-      setSavingNiche(false);
+      setTools(data || []);
+    } catch (err) {
+      console.error('Error fetching tools:', err);
     }
   }
 
-  async function deleteNiche(id: string) {
-    if (!isAdmin) return;
+  async function fetchExtensions() {
     try {
-      const { error } = await supabase
-        .from('niches')
-        .delete()
-        .eq('id', id);
+      const { data, error } = await supabase
+        .from('extensions')
+        .select('*')
+        .order('created_at', { ascending: false });
       if (error) throw error;
-      setNiches(niches.filter(n => n.id !== id));
+      setExtensions(data || []);
     } catch (err) {
-      console.error('Error deleting niche:', err);
+      console.error('Error fetching extensions:', err);
     }
   }
 
@@ -365,21 +361,56 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     setActiveLesson(null);
   };
 
+  const handleGlobalBack = () => {
+    if (viewState === 'PLAYER') {
+        goBackToModule();
+    } else if (viewState === 'MODULE') {
+        goBackToCourse();
+    } else if (viewState === 'COURSE') {
+        setViewState('COURSES');
+        setActiveCourse(null);
+    } else {
+        goHome();
+    }
+  };
+
   // --- CALCULATIONS ---
   const getDirectImageUrl = (url: string | null | undefined): string => {
     if (!url) return "";
     let cleanUrl = url.trim();
     
+    // Ensure protocol
     if (!/^https?:\/\//i.test(cleanUrl)) {
       if (cleanUrl.toLowerCase().includes("imgur.com")) {
         cleanUrl = "https://" + cleanUrl;
       }
     }
 
+    // Handle Imgur
     if (cleanUrl.includes("imgur.com") && !cleanUrl.includes("i.imgur.com")) {
-      const parts = cleanUrl.split("/");
-      const id = parts[parts.length - 1].split(/[?#]/)[0];
-      if (id && /^[a-zA-Z0-9]+$/.test(id)) {
+      // Priority: Check for hash fragment (common in albums/galleries to point to a specific image)
+      const hashSplit = cleanUrl.split('#');
+      if (hashSplit.length > 1) {
+        const hashId = hashSplit[1].split(/[?]/)[0];
+        if (hashId && /^[a-zA-Z0-9]+$/.test(hashId) && hashId.length >= 5) {
+          return `https://i.imgur.com/${hashId}.png`;
+        }
+      }
+
+      // Don't try to resolve generic album/gallery links without specific hashes
+      if (cleanUrl.includes("/a/") || cleanUrl.includes("/gallery/")) {
+        return cleanUrl;
+      }
+
+      // Remove trailing slashes and query params/fragments
+      const nakedUrl = cleanUrl.split(/[?#]/)[0].replace(/\/+$/, '');
+      const parts = nakedUrl.split("/");
+      const lastPart = parts[parts.length - 1];
+      
+      // Remove extension if already present
+      const id = lastPart.split('.')[0];
+      
+      if (id && /^[a-zA-Z0-9]+$/.test(id) && id.length >= 5) {
         return `https://i.imgur.com/${id}.png`;
       }
     }
@@ -539,9 +570,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         animate={{ width: sidebarOpen ? '350px' : '0px', opacity: sidebarOpen ? 1 : 0 }}
         className="h-screen bg-[#0a0a0a] border-r border-white/5 flex-shrink-0 flex flex-col overflow-hidden relative z-[60]"
       >
-        <div className="p-8 border-b border-white/5 flex flex-col justify-center items-center relative bg-zinc-900/50 cursor-pointer" onClick={goHome}>
-            <button onClick={(e) => { e.stopPropagation(); setSidebarOpen(false); }} className="lg:hidden absolute top-6 right-6 text-white"><X/></button>
-            <h2 className="font-black italic text-3xl tracking-tighter text-center">EZEH <span className="text-red-600">ACADEMY</span></h2>
+        <div className="h-[68px] min-h-[68px] border-b border-white/5 flex flex-col justify-center items-center relative bg-zinc-900/50 cursor-pointer" onClick={goHome}>
+            <button onClick={(e) => { e.stopPropagation(); setSidebarOpen(false); }} className="lg:hidden absolute top-1/2 -translate-y-1/2 right-4 text-white"><X/></button>
+            <h2 className="font-black italic text-xl tracking-tighter text-center">EZEH <span className="text-red-600">ACADEMY</span></h2>
         </div>
 
         <div className="p-4 border-b border-white/5">
@@ -555,44 +586,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
         {/* --- DYNAMIC SIDEBAR CONTENT --- */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6 pb-20">
-            {viewState === 'PLAYER' && activeCourse ? (
-                // PLAYER MODE: SHOW MODULE TREE FOR ACTIVE COURSE
-                <div className="animate-fade-in">
-                    <div className="px-4 mb-4 text-[10px] font-black uppercase tracking-widest text-zinc-500">Contenido del Curso</div>
-                    <div className="space-y-4">
-                    {activeCourse.modules?.map((mod: any) => (
-                        <div key={mod.id} className="bg-black border border-white/5 rounded-xl overflow-hidden">
-                             <button onClick={() => toggleModuleInPlayer(mod.id)} className="w-full p-4 flex justify-between items-center text-left hover:bg-white/5">
-                                <span className="font-bold text-xs text-zinc-300 uppercase tracking-wide">{mod.title}</span>
-                                <ChevronDown size={14} className={`text-zinc-600 transition-transform ${expandedModules.has(mod.id) ? 'rotate-180' : ''}`}/>
-                             </button>
-                             <AnimatePresence>
-                                {expandedModules.has(mod.id) && (
-                                    <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden bg-zinc-900/30 border-t border-white/5">
-                                        <div className="p-2 space-y-1">
-                                            {mod.lessons?.map((lesson: any) => {
-                                                const isActive = activeLesson?.id === lesson.id;
-                                                const isCompleted = completedLessons.has(lesson.id);
-                                                return (
-                                                  <button key={lesson.id} onClick={() => handleLessonSelect(lesson)} className={`w-full p-2 pl-4 rounded-lg flex items-center gap-3 text-left transition-all ${isActive ? 'bg-white/10 text-red-500' : 'hover:bg-white/5 text-zinc-400'}`}>
-                                                      <div className={`w-1.5 h-1.5 rounded-full ${isCompleted ? 'bg-green-500' : (isActive ? 'bg-red-500 animate-pulse' : 'bg-zinc-700')}`} />
-                                                      <span className={`text-[10px] font-bold uppercase truncate ${isCompleted && !isActive ? 'line-through opacity-50' : ''}`}>{lesson.title}</span>
-                                                  </button>
-                                                )
-                                            })}
-                                        </div>
-                                    </motion.div>
-                                )}
-                             </AnimatePresence>
-                        </div>
-                    ))}
-                    </div>
-                    <button onClick={goBackToModule} className="mt-8 w-full py-3 border border-white/10 rounded-xl text-xs font-bold uppercase text-zinc-400 hover:bg-white/5 flex items-center justify-center gap-2"><ArrowLeft size={14}/> Volver</button>
-                </div>
-            ) : (
-                // SIDEBAR NAVIGATION BUTTONS
-                <div className="space-y-4">
-                    {/* CURSOS BUTTON (RED) */}
+            {/* SIDEBAR NAVIGATION BUTTONS */}
+            <div className="space-y-4">
+                {/* CURSOS BUTTON (RED) */}
                     <div 
                         onClick={() => { setViewState('COURSES'); setActiveCourse(null); setActiveModule(null); setActiveLesson(null); }} 
                         className={`relative overflow-hidden p-5 rounded-2xl border transition-all cursor-pointer group ${
@@ -610,20 +606,22 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                     </div>
 
                     {/* NICHES BUTTON */}
-                    <div onClick={() => { setViewState('NICHES'); setActiveCourse(null); setActiveModule(null); setActiveLesson(null); }} 
-                        className={`relative overflow-hidden p-5 rounded-2xl border transition-all cursor-pointer group ${
-                            viewState === 'NICHES'
-                                ? 'bg-gradient-to-br from-white/20 to-white/5 border-white/40 shadow-[0_0_20px_rgba(255,255,255,0.1)]' 
-                                : 'bg-gradient-to-br from-red-600 to-red-800 border-white/20 hover:border-white/40 hover:from-red-500 hover:to-red-700 shadow-[0_0_15px_rgba(234,42,51,0.2)]'
-                        }`}
-                    >
-                        <div className="flex items-center justify-between relative z-10">
-                            <div className="flex-1 min-w-0">
-                                <h3 className="text-sm font-black uppercase truncate text-white">NICHOS</h3>
+                    {isAdmin && (
+                        <div onClick={() => { setViewState('NICHES'); setActiveCourse(null); setActiveModule(null); setActiveLesson(null); }} 
+                            className={`relative overflow-hidden p-5 rounded-2xl border transition-all cursor-pointer group ${
+                                viewState === 'NICHES'
+                                    ? 'bg-gradient-to-br from-white/20 to-white/5 border-white/40 shadow-[0_0_20px_rgba(255,255,255,0.1)]' 
+                                    : 'bg-gradient-to-br from-red-600 to-red-800 border-white/20 hover:border-white/40 hover:from-red-500 hover:to-red-700 shadow-[0_0_15px_rgba(234,42,51,0.2)]'
+                            }`}
+                        >
+                            <div className="flex items-center justify-between relative z-10">
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-sm font-black uppercase truncate text-white">NICHOS</h3>
+                                </div>
+                                {viewState === 'NICHES' && <ChevronRight size={18} className="text-white"/>}
                             </div>
-                            {viewState === 'NICHES' && <ChevronRight size={18} className="text-white"/>}
                         </div>
-                    </div>
+                    )}
 
                     {/* TOOLS BUTTON */}
                     <div onClick={() => { setViewState('TOOLS'); setActiveCourse(null); setActiveModule(null); setActiveLesson(null); }} 
@@ -640,29 +638,79 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                             {viewState === 'TOOLS' && <ChevronRight size={18} className="text-white"/>}
                         </div>
                     </div>
+
+                    {/* EXTENSIONS BUTTON */}
+                    <div onClick={() => { setViewState('EXTENSIONS'); setActiveCourse(null); setActiveModule(null); setActiveLesson(null); }} 
+                        className={`relative overflow-hidden p-5 rounded-2xl border transition-all cursor-pointer group ${
+                            viewState === 'EXTENSIONS'
+                                ? 'bg-gradient-to-br from-white/20 to-white/5 border-white/40 shadow-[0_0_20px_rgba(255,255,255,0.1)]' 
+                                : 'bg-gradient-to-br from-red-600 to-red-800 border-white/20 hover:border-white/40 hover:from-red-500 hover:to-red-700 shadow-[0_0_15px_rgba(234,42,51,0.2)]'
+                        }`}
+                    >
+                        <div className="flex items-center justify-between relative z-10">
+                            <div className="flex-1 min-w-0">
+                                <h3 className="text-sm font-black uppercase truncate text-white">EXTENSIONES</h3>
+                            </div>
+                            {viewState === 'EXTENSIONS' && <ChevronRight size={18} className="text-white"/>}
+                        </div>
+                    </div>
                 </div>
-            )}
         </div>
 
-        <div className="p-4 border-t border-white/5 space-y-3">
+        <div className="p-4 border-t border-white/5 flex gap-3">
             {isAdmin && (
-                <Link to="/admin" className="w-full py-4 rounded-xl text-xs font-black uppercase text-white bg-gradient-to-r from-red-600 to-red-900 hover:scale-[1.02] transition-transform shadow-lg shadow-red-900/30 flex items-center justify-center gap-2 border border-white/10">
-                    <Settings size={16} className="text-white"/> EZEH STUDIO
+                <Link to="/admin" className="flex-1 py-3 rounded-xl text-[10px] font-black uppercase text-white bg-gradient-to-r from-red-600 to-red-900 hover:scale-[1.02] transition-transform shadow-lg shadow-red-900/30 flex items-center justify-center gap-1.5 border border-white/10">
+                    <Settings size={14} className="text-white"/> EZEH STUDIO
                 </Link>
             )}
-            <button onClick={onLogout} className="w-full py-3 bg-zinc-900 rounded-xl text-xs font-bold uppercase text-zinc-500 hover:text-white hover:bg-zinc-800 transition-all flex items-center justify-center gap-2">
-                <LogOut size={14}/> Cerrar Sesión
+            <button onClick={onLogout} className="flex-1 py-3 bg-zinc-900 rounded-xl text-[10px] font-bold uppercase text-zinc-500 hover:text-white hover:bg-zinc-800 transition-all flex items-center justify-center gap-1.5">
+                <LogOut size={14}/> CERRAR SESIÓN
             </button>
         </div>
       </motion.aside>
 
       {/* --- MAIN CONTENT AREA --- */}
       <div className="flex-1 h-screen relative flex flex-col overflow-hidden bg-[#050505]">
-          {!sidebarOpen && (
-              <button onClick={() => setSidebarOpen(true)} className="absolute top-6 left-6 z-50 p-3 bg-black/50 backdrop-blur-md rounded-full border border-white/10 text-white hover:bg-red-600 transition-all">
-                  <Menu size={20}/>
-              </button>
+          {/* Invisible trigger zone to show header when hovering top edge */}
+          {viewState === 'PLAYER' && isVideoPlaying && (
+              <div 
+                 className="absolute top-0 left-0 w-full h-12 z-[70]"
+                 onMouseEnter={() => setIsHeaderHovered(true)}
+              />
           )}
+
+          {/* HEADER BAR */}
+          <AnimatePresence>
+            {!(viewState === 'PLAYER' && isVideoPlaying && !isHeaderHovered) && (
+              <motion.div 
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 68, opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  onMouseEnter={() => setIsHeaderHovered(true)}
+                  onMouseLeave={() => setIsHeaderHovered(false)}
+                  className="w-full relative z-50 flex-shrink-0 overflow-hidden bg-gradient-to-r from-[#8b0000] to-[#050505] shadow-[0_4px_30px_rgba(234,42,51,0.15)]"
+              >
+                  <div className="w-full h-[68px] border-b border-black/50 flex items-center justify-between px-6 absolute bottom-0 left-0 right-0">
+                      <div className="flex items-center gap-4">
+                          {!sidebarOpen && (
+                              <button onClick={() => setSidebarOpen(true)} className="p-2 bg-black/40 backdrop-blur-md rounded-lg border border-white/10 text-white hover:bg-white hover:text-black transition-all">
+                                  <Menu size={20}/>
+                              </button>
+                          )}
+                          {viewState !== 'HOME' && (
+                              <button onClick={handleGlobalBack} className="text-white hover:text-white/80 transition-colors p-2 flex items-center justify-center bg-white/5 rounded-full hover:bg-white/10">
+                                  <ArrowLeft size={20} />
+                              </button>
+                          )}
+                      </div>
+                      <h1 className="text-white font-black italic tracking-widest text-lg uppercase drop-shadow-md text-right">
+                         {viewState === 'HOME' ? 'PANEL HOME' : viewState === 'COURSES' || viewState === 'COURSE' || viewState === 'MODULE' || viewState === 'PLAYER' ? 'CURSOS' : viewState === 'NICHES' ? 'NICHOS GANADORES' : viewState === 'TOOLS' ? 'HERRAMIENTAS' : viewState === 'EXTENSIONS' ? 'EXTENSIONES' : ''}
+                      </h1>
+                  </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <main className="flex-1 overflow-y-auto custom-scrollbar p-0 relative">
                          {/* === VIEW: HOME (LOBBY) === */}
@@ -711,33 +759,28 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                 </motion.div>
              )}
 
-             {/* === VIEW: COURSES LIST (HORIZONTAL BANNERS) === */}
+             {/* === VIEW: COURSES LIST (CATALOG GRID) === */}
              {viewState === 'COURSES' && (
                 <motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} className="space-y-8 p-6 lg:p-12">
-                   <div className="flex items-center gap-3 px-2">
-                       <div className="h-6 w-1 rounded-full bg-red-600"></div>
-                       <h2 className="text-xl font-black uppercase italic text-white tracking-widest">Mis Cursos</h2>
-                   </div>
-
-                   <div className="flex flex-col gap-y-12 px-2 max-w-5xl">
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-2 max-w-7xl mx-auto">
                        {courses.map(course => (
                            <div 
                                key={course.id} 
                                onClick={() => handleCourseSelect(course)}
-                               className="group relative cursor-pointer flex flex-col pt-7 w-[890px] transition-transform duration-300 hover:-translate-y-0.5"
+                               className="group relative cursor-pointer flex flex-col pt-7 w-full transition-transform duration-300 hover:-translate-y-0.5"
                            >
-                               {/* Floating Card carrying the Course Title and Module Count above the banner */}
-                               <div className="absolute top-1 left-4.5 z-10 bg-[#0a0a0a]/95 border border-white/10 px-4 py-2 rounded-xl shadow-2xl flex items-center gap-3 transition-all group-hover:border-red-600/35 backdrop-blur-md">
-                                   <span className="text-xs sm:text-sm font-black uppercase tracking-wide text-white truncate max-w-[240px] sm:max-w-md md:max-w-xl">
+                               {/* Course title and module badge floating above */}
+                               <div className="absolute top-1 left-4 z-10 bg-[#0a0a0a]/95 border border-white/10 px-4 py-2 rounded-xl shadow-2xl flex items-center gap-2 transition-all group-hover:border-red-600/35 backdrop-blur-md">
+                                   <span className="text-[10px] font-black uppercase tracking-wide text-white truncate max-w-[140px] sm:max-w-xs">
                                        {course.title}
                                    </span>
-                                   <span className="text-[10px] sm:text-xs font-black text-red-500 uppercase tracking-widest bg-red-600/10 px-2.5 py-1 rounded-md border border-red-600/20">
+                                   <span className="text-[9px] font-black text-red-500 uppercase tracking-widest bg-red-600/10 px-2 py-0.5 rounded-md border border-red-600/20 flex-shrink-0">
                                        {course.modules?.length || 0} MOD
                                    </span>
                                </div>
 
-                               {/* The 890px x 200px Banner storing ONLY the image */}
-                               <div className="w-[890px] h-[200px] min-w-[890px] min-h-[200px] max-w-[890px] max-h-[200px] rounded-[1.5rem] overflow-hidden border border-white/5 bg-zinc-950 group-hover:border-red-600/40 transition-all shadow-xl relative flex-shrink-0">
+                               {/* The Square Cover */}
+                               <div className="aspect-square w-full rounded-2xl overflow-hidden border border-white/5 bg-zinc-950 group-hover:border-red-600/40 transition-all shadow-xl relative flex-shrink-0">
                                    <img 
                                        src={getDirectImageUrl(course.thumbnail) || "https://picsum.photos/seed/course/800/450"}
                                        alt={course.title}
@@ -754,86 +797,110 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
              {/* === VIEW: NICHES === */}
              {viewState === 'NICHES' && (
                 <motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} className="h-full flex flex-col">
-                    {/* Fixed Header with Input */}
-                    <div className="p-6 lg:p-12 border-b border-white/5 bg-[#050505]/95 backdrop-blur-xl z-20 sticky top-0">
-                        <div className="max-w-4xl mx-auto w-full space-y-6">
-                            <div className="flex items-center gap-3">
-                                <div className="h-8 w-1 rounded-full bg-red-600"></div>
-                                <h1 className="text-3xl font-black uppercase italic text-white tracking-widest">Nichos <span className="text-red-600">Ganadores</span></h1>
-                            </div>
-                            
-                            <div className="space-y-4">
-                                <div className="flex gap-4">
-                                    <input 
-                                        type="text"
-                                        value={newNicheUrl}
-                                        onChange={(e) => setNewNicheUrl(e.target.value)}
-                                        placeholder="Pegar link de canal de YouTube..."
-                                        className="flex-1 bg-black border border-white/10 rounded-2xl py-4 px-6 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-red-600/50 transition-all shadow-2xl"
-                                    />
-                                    <button 
-                                        onClick={addNiche}
-                                        disabled={savingNiche || !newNicheUrl.trim()}
-                                        className="px-8 bg-red-600 text-white font-bold uppercase text-xs tracking-widest rounded-2xl hover:bg-red-500 transition-colors disabled:opacity-50 shadow-lg shadow-red-600/20 flex items-center gap-2 whitespace-nowrap"
-                                    >
-                                        {savingNiche ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <><Plus size={16} /> Añadir Nicho</>}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     {/* Scrollable List */}
-                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-12">
-                        <div className="max-w-4xl mx-auto w-full space-y-3">
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-12 pt-12">
+                        <div className="max-w-7xl mx-auto w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                             {niches.map(niche => (
                                 <motion.div 
                                     layout
                                     key={niche.id} 
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    className="group relative bg-[#0a0a0a] border border-white/5 p-6 rounded-2xl hover:border-red-600/30 transition-all flex flex-col md:flex-row items-start gap-6"
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="group relative bg-[#0a0a0a] border border-white/5 p-6 rounded-2xl hover:border-red-600/30 transition-all flex flex-col gap-6"
                                 >
-                                    {/* Thumbnail / Icon */}
-                                    <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/10 flex-shrink-0 relative group-hover:border-red-600 transition-colors bg-zinc-900 flex items-center justify-center text-zinc-700">
-                                        <Youtube size={24} />
-                                    </div>
-                                    
-                                    {/* Info */}
-                                    <div className="flex-1 min-w-0 space-y-2">
-                                        <div>
-                                            <h4 className="text-lg font-black text-white uppercase tracking-tight truncate">
-                                                {niche.name || 'Canal de YouTube'}
-                                            </h4>
-                                            <a href={niche.url} target="_blank" rel="noopener noreferrer" className="text-xs text-zinc-500 hover:text-red-500 truncate block transition-colors mb-2">
-                                                {niche.url}
-                                            </a>
-                                            {niche.description && (
-                                                <p className="text-sm text-zinc-400 leading-relaxed border-l-2 border-white/10 pl-3 italic">
-                                                    "{niche.description}"
-                                                </p>
+                                    {/* Info Panel */}
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/10 flex-shrink-0 relative group-hover:border-red-600 transition-colors bg-zinc-900 flex items-center justify-center text-zinc-700">
+                                            {niche.thumbnail ? (
+                                                <img 
+                                                    src={getDirectImageUrl(niche.thumbnail)} 
+                                                    alt={niche.name} 
+                                                    className="w-full h-full object-cover" 
+                                                    referrerPolicy="no-referrer"
+                                                />
+                                            ) : (
+                                                <Youtube size={24} />
+                                            )}
+                                        </div>
+                                        <div className="flex-1 min-w-0 flex flex-col">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <h4 className="text-lg font-black text-white uppercase tracking-tight truncate">
+                                                    {niche.name || 'Canal de YouTube'}
+                                                </h4>
+                                                {niche.created_at && (
+                                                    <span className="text-[8px] font-black bg-white/10 text-white px-2 py-0.5 rounded-full uppercase tracking-tighter whitespace-nowrap">
+                                                        {(() => {
+                                                            const createdDate = new Date(niche.created_at);
+                                                            const expiryDate = new Date(createdDate);
+                                                            expiryDate.setDate(expiryDate.getDate() + 30);
+                                                            const now = new Date();
+                                                            const diffTime = expiryDate.getTime() - now.getTime();
+                                                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                                            return diffDays > 0 ? `${diffDays}d` : '0d';
+                                                        })()}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {niche.subscriber_count && (
+                                                <span className="text-sm font-bold text-red-500 mt-0.5">
+                                                    {Number(niche.subscriber_count).toLocaleString()} Subs
+                                                </span>
                                             )}
                                         </div>
                                     </div>
 
+                                    <div className="flex-1 flex flex-col">
+                                        {niche.description && (() => {
+                                            try {
+                                                const popularVideo = JSON.parse(niche.description);
+                                                if (popularVideo && popularVideo.id && popularVideo.title) {
+                                                    return (
+                                                        <div className="mt-2 border-t border-white/5 pt-4">
+                                                            <h5 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3">Vídeo más popular</h5>
+                                                            <a href={`https://youtube.com/watch?v=${popularVideo.id}`} target="_blank" rel="noopener noreferrer" className="group/video block">
+                                                                <div className="aspect-video bg-zinc-900 rounded-lg overflow-hidden border border-white/5 relative mb-2 group-hover/video:border-red-600/50 transition-colors">
+                                                                    <img 
+                                                                        src={getDirectImageUrl(popularVideo.thumbnail)} 
+                                                                        alt={popularVideo.title} 
+                                                                        className="w-full h-full object-cover" 
+                                                                        referrerPolicy="no-referrer"
+                                                                    />
+                                                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/video:opacity-100 transition-opacity flex items-center justify-center">
+                                                                        <div className="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center text-white">
+                                                                            <Play size={16} fill="currentColor" />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <p className="text-sm font-bold text-zinc-300 line-clamp-2 leading-tight group-hover/video:text-white transition-colors">{popularVideo.title}</p>
+                                                                {popularVideo.viewCount && (
+                                                                    <p className="text-xs font-black bg-red-600/20 text-red-500 inline-block px-2 py-1 rounded mt-2 border border-red-600/30">
+                                                                        {Number(popularVideo.viewCount).toLocaleString()} Vistas
+                                                                    </p>
+                                                                )}
+                                                            </a>
+                                                        </div>
+                                                    );
+                                                }
+                                            } catch (e) {
+                                                return (
+                                                    <p className="text-sm text-zinc-400 leading-relaxed border-t border-white/5 pt-4 italic">
+                                                        "{niche.description}"
+                                                    </p>
+                                                );
+                                            }
+                                        })()}
+                                    </div>
+
                                     {/* Actions */}
-                                    <div className="flex items-center gap-2 absolute top-4 right-4 md:relative md:top-auto md:right-auto">
+                                    <div className="flex items-center gap-3 border-t border-white/5 pt-4 mt-auto">
                                         <a 
                                             href={niche.url} 
                                             target="_blank" 
                                             rel="noopener noreferrer"
-                                            className="p-2 rounded-lg bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white transition-colors"
+                                            className="flex-1 px-4 py-3 bg-red-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-red-500 transition-all shadow-lg shadow-red-600/20 flex items-center justify-center gap-2 group/btn"
                                         >
-                                            <ExternalLink size={18} />
+                                            IR AL CANAL <ExternalLink size={12} className="group-hover/btn:translate-x-1 group-hover/btn:-translate-y-1 transition-transform" />
                                         </a>
-                                        {isAdmin && (
-                                            <button 
-                                                onClick={() => deleteNiche(niche.id)}
-                                                className="p-2 rounded-lg bg-red-900/20 text-red-700 hover:bg-red-600 hover:text-white transition-colors"
-                                            >
-                                                <Trash2 size={18} />
-                                            </button>
-                                        )}
                                     </div>
                                 </motion.div>
                             ))}
@@ -855,12 +922,81 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
              {/* === VIEW: TOOLS === */}
              {viewState === 'TOOLS' && (
-                <motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} className="h-full flex flex-col items-center justify-center p-12">
-                     <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-white/10 flex items-center justify-center mb-6">
-                        <img src="https://i.imgur.com/KC6F9va.png" alt="Herramientas icon" referrerPolicy="no-referrer" className="w-8 h-8 object-contain" />
-                     </div>
-                     <h2 className="text-2xl font-black uppercase italic text-white tracking-widest mb-2">Herramientas</h2>
-                     <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">Próximamente disponibles</p>
+                <motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} className="h-full flex flex-col">
+                    {/* Tools Catalog Grid */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-12 pt-12">
+                        <div className="max-w-7xl mx-auto w-full grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                            {tools.map(tool => (
+                                <motion.div 
+                                    layout
+                                    key={tool.id}
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="group relative"
+                                >
+                                    <a 
+                                        href={tool.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="block relative h-24 w-full rounded-2xl p-[1px] transition-all hover:scale-[1.02] shadow-xl overflow-hidden border border-white"
+                                    >
+                                        <div className="absolute inset-0 bg-gradient-to-br from-red-600 via-black to-red-900 animate-gradient-slow" />
+                                        <div className="relative h-full w-full flex items-center justify-center bg-black/40 backdrop-blur-sm group-hover:bg-transparent transition-colors">
+                                            <span className="text-sm font-black uppercase tracking-widest text-white text-center px-4 drop-shadow-md">
+                                                {tool.name}
+                                            </span>
+                                        </div>
+                                    </a>
+                                    
+                                </motion.div>
+                            ))}
+                        </div>
+                    </div>
+                </motion.div>
+             )}
+
+             {/* === VIEW: EXTENSIONS === */}
+             {viewState === 'EXTENSIONS' && (
+                <motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} className="h-full flex flex-col">
+                    {/* Extensions Catalog Grid (Rows of 3) */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-12 pt-12">
+                        <div className="max-w-7xl mx-auto w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                            {extensions.map(ext => (
+                                <motion.div 
+                                    layout
+                                    key={ext.id}
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="group relative bg-[#0a0a0a] border border-white/5 p-8 rounded-3xl hover:border-red-600/30 transition-all flex flex-col gap-6"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-14 h-14 rounded-2xl bg-red-600/10 border border-red-600/20 flex items-center justify-center text-red-500 group-hover:scale-110 transition-transform">
+                                            <Folder size={28} />
+                                        </div>
+                                        <h4 className="text-xl font-black text-white uppercase tracking-tight truncate flex-1">
+                                            {ext.name}
+                                        </h4>
+                                    </div>
+                                    
+                                    <p className="text-sm text-zinc-500 leading-relaxed line-clamp-4 flex-1">
+                                        {ext.description || 'Sin descripción disponible.'}
+                                    </p>
+
+                                    <div className="pt-4 border-t border-white/5">
+                                        <a 
+                                            href={ext.url} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="w-full py-4 rounded-2xl bg-gradient-to-br from-red-600 via-black to-red-900 border border-white/10 text-white text-xs font-black uppercase tracking-[0.2em] hover:scale-[1.02] transition-all flex items-center justify-center gap-2 shadow-xl"
+                                        >
+                                            DESCARGAR EXTENSIÓN <Download size={14} />
+                                        </a>
+                                    </div>
+                                    
+                                </motion.div>
+                            ))}
+                        </div>
+                    </div>
                 </motion.div>
              )}
 
@@ -868,13 +1004,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
              {viewState === 'COURSE' && activeCourse && (
                 <motion.div initial={{opacity: 0, x: 20}} animate={{opacity: 1, x: 0}} className="min-h-full p-6 lg:p-12 relative">
                      
-                     <button onClick={() => setViewState('COURSES')} className="absolute top-6 left-6 lg:top-12 lg:left-12 flex items-center gap-2 text-red-600 hover:text-red-500 transition-colors z-20 group">
-                         <div className="w-8 h-8 rounded-full bg-red-600/10 flex items-center justify-center group-hover:bg-red-600/20">
-                             <ChevronLeft size={18} />
-                         </div>
-                         <span className="text-xs font-black uppercase tracking-widest">Volver</span>
-                     </button>
-
                      {/* RESTORED TITLE */}
                      <div className="mb-20 text-center relative z-10 mt-16 lg:mt-0">
                          <h1 className="text-4xl md:text-6xl font-black tracking-tight uppercase italic">
@@ -931,12 +1060,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
              {/* === VIEW: MODULE LESSON FLOW (CATALOG) === */}
              {viewState === 'MODULE' && activeModule && activeModule.lessons && (
                  <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="min-h-full p-6 lg:p-12 relative">
-                     <button onClick={() => setViewState('COURSE')} className="absolute top-6 left-6 lg:top-12 lg:left-12 flex items-center gap-2 text-red-600 hover:text-red-500 transition-colors z-20 group">
-                         <div className="w-8 h-8 rounded-full bg-red-600/10 flex items-center justify-center group-hover:bg-red-600/20">
-                             <ChevronLeft size={18} />
-                         </div>
-                         <span className="text-xs font-black uppercase tracking-widest">Volver</span>
-                     </button>
                      
                      <header className="w-full max-w-7xl mx-auto flex flex-col items-center z-10 mb-16 mt-16 lg:mt-0">
                          <h1 className="text-3xl md:text-5xl font-black tracking-tight text-center uppercase italic">CLASES DE <span className="text-red-600">{activeModule.title}</span></h1>
@@ -992,14 +1115,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
               {/* === VIEW: PLAYER (CLASS) === */}
              {viewState === 'PLAYER' && activeLesson && (
-                 <motion.div initial={{opacity: 0, x: 20}} animate={{opacity: 1, x: 0}} className="space-y-8 p-6 lg:p-12 relative pt-20 lg:pt-12">
-                     <button onClick={() => setViewState('MODULE')} className="absolute top-6 left-6 lg:top-12 lg:left-12 flex items-center gap-2 text-red-600 hover:text-red-500 transition-colors z-20 group">
-                         <div className="w-8 h-8 rounded-full bg-red-600/10 flex items-center justify-center group-hover:bg-red-600/20">
-                             <ChevronLeft size={18} />
-                         </div>
-                         <span className="text-xs font-black uppercase tracking-widest">Volver</span>
-                     </button>
-
+                 <motion.div initial={{opacity: 0, x: 20}} animate={{opacity: 1, x: 0}} className="space-y-8 p-6 lg:p-12 relative">
+                     
                      <VideoRenderContainer videoUrl={resolvedVideoUrl} title={activeLesson.title} />
 
                     <div className="space-y-6">

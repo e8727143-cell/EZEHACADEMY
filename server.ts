@@ -225,7 +225,6 @@ app.get('/api/youtube/channel-info', async (req: any, res: any) => {
     console.log(`Using API Key (first 4 chars): ${apiKey ? apiKey.substring(0, 4) : 'UNDEFINED'}`);
 
     // 2. Get Channel Stats
-    // User requested to only fetch: channel name, subscribers, and video count.
     try {
       const statsUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelId}&key=${apiKey}`;
       const statsData = await fetchYouTube(statsUrl);
@@ -238,19 +237,44 @@ app.get('/api/youtube/channel-info', async (req: any, res: any) => {
       const channel = statsData.items[0];
       const snippet = channel.snippet;
       const statistics = channel.statistics;
+      
+      let popularVideo: any = null;
+      try {
+          const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=viewCount&maxResults=1&type=video&key=${apiKey}`;
+          const searchData = await fetchYouTube(searchUrl);
+          
+          if (searchData.items && searchData.items.length > 0) {
+              const videoItem = searchData.items[0];
+              const videoId = videoItem.id?.videoId;
+              
+              if (videoId) {
+                  const videoStatsUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${videoId}&key=${apiKey}`;
+                  const videoStatsData = await fetchYouTube(videoStatsUrl);
+                  
+                  if (videoStatsData.items && videoStatsData.items.length > 0) {
+                      const vStats = videoStatsData.items[0];
+                      popularVideo = {
+                          id: videoId,
+                          title: vStats.snippet.title,
+                          thumbnail: vStats.snippet.thumbnails?.medium?.url || vStats.snippet.thumbnails?.default?.url,
+                          publishedAt: vStats.snippet.publishedAt,
+                          viewCount: vStats.statistics?.viewCount || "0"
+                      };
+                  }
+              }
+          }
+      } catch (e) {
+          console.error("Error fetching popular video", e);
+      }
 
-      // Only return what was requested: name, subscribers, video count (and ID/thumbnail for basic UI context if needed, but prioritizing user request)
+      // Only return what was requested: name, subscribers, video count, popular video
       const result = {
         id: channel.id,
         title: snippet?.title,
-        // description: snippet?.description, // Removed
-        // customUrl: snippet?.customUrl, // Removed
-        // publishedAt: snippet?.publishedAt, // Removed
-        thumbnail: snippet?.thumbnails?.default?.url, // Keeping a small thumbnail is usually essential for UI confirmation, but can remove if strictly requested. I'll keep a small one.
+        thumbnail: snippet?.thumbnails?.medium?.url || snippet?.thumbnails?.default?.url,
         subscriberCount: statistics?.subscriberCount,
         videoCount: statistics?.videoCount,
-        // viewCount: statistics?.viewCount, // Removed
-        // hiddenSubscriberCount: statistics?.hiddenSubscriberCount // Removed
+        popularVideo
       };
 
       res.json(result);
