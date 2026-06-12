@@ -324,6 +324,43 @@ app.get('/api/youtube/channel-info', async (req: any, res: any) => {
   }
 });
 
+// API Route: Profile Chat (OpenRouter Proxy)
+app.post('/api/profile-chat', async (req: any, res: any) => {
+  const { messages } = req.body;
+  const apiKey = process.env.OPEN_ROUTER_KEY;
+
+  if (!apiKey) {
+    console.error('OPEN_ROUTER_KEY is missing');
+    return res.status(500).json({ error: 'Server configuration error: OPEN_ROUTER_KEY missing' });
+  }
+
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "X-Title": "EZEH Academy Profile Assistant"
+      },
+      body: JSON.stringify({
+        "model": "deepseek/deepseek-r1",
+        "messages": messages,
+        "max_tokens": 2048
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) {
+      console.error('OpenRouter API Error Response:', data.error);
+      return res.status(response.status).json({ error: data.error.message || 'Error from AI service' });
+    }
+    res.json(data);
+  } catch (error: any) {
+    console.error('OpenRouter Proxy Error:', error);
+    res.status(500).json({ error: 'Failed to communicate with AI service: ' + error.message });
+  }
+});
+
 // Vite Middleware (Must be last)
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {

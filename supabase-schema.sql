@@ -76,6 +76,10 @@ alter table public.profiles add column if not exists estado_suscripcion text def
 alter table public.profiles add column if not exists fecha_registro timestamp with time zone default timezone('utc'::text, now());
 alter table public.profiles add column if not exists created_at timestamp with time zone default timezone('utc'::text, now());
 alter table public.profiles add column if not exists ultimo_acceso timestamp with time zone default timezone('utc'::text, now());
+alter table public.profiles add column if not exists tiene_acceso_cursos boolean default false;
+alter table public.profiles add column if not exists tiene_acceso_nichos boolean default false;
+alter table public.profiles add column if not exists tiene_acceso_herramientas boolean default false;
+alter table public.profiles add column if not exists tiene_acceso_extensiones boolean default false;
 
 -- B. Historial de Accesos (Audit logging table to identify concurrent accounts/IP sharing)
 create table if not exists public.historial_accesos (
@@ -213,6 +217,10 @@ create table if not exists public.extensions (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- --- SAFEGUARDS: Ensure new resource columns exist ---
+alter table public.tools add column if not exists es_premium boolean default false;
+alter table public.extensions add column if not exists es_premium boolean default false;
+
 
 -- -------------------------------------------------------------------------
 -- 2. AUTOMATION: PROCEDURES, TRIGGERS, AND METRIC HOOKS
@@ -240,7 +248,11 @@ begin
     estado_suscripcion, 
     fecha_registro, 
     created_at,
-    ultimo_acceso
+    ultimo_acceso,
+    tiene_acceso_cursos,
+    tiene_acceso_nichos,
+    tiene_acceso_herramientas,
+    tiene_acceso_extensiones
   )
   values (
     new.id, 
@@ -254,7 +266,11 @@ begin
     'activo', -- Active enrollment state standard on signup
     now(),
     now(),
-    now()
+    now(),
+    (new.email = 'ezehcontactooficial@gmail.com'),
+    (new.email = 'ezehcontactooficial@gmail.com'),
+    (new.email = 'ezehcontactooficial@gmail.com'),
+    (new.email = 'ezehcontactooficial@gmail.com')
   );
   return new;
 end;
@@ -274,6 +290,10 @@ begin
     -- Silently discard malicious parameter changes to secure role and active subscription status
     new.role := old.role;
     new.estado_suscripcion := old.estado_suscripcion;
+    new.tiene_acceso_cursos := old.tiene_acceso_cursos;
+    new.tiene_acceso_nichos := old.tiene_acceso_nichos;
+    new.tiene_acceso_herramientas := old.tiene_acceso_herramientas;
+    new.tiene_acceso_extensiones := old.tiene_acceso_extensiones;
   end if;
   return new;
 end;

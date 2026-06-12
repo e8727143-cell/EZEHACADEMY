@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  Trash2, LogOut, ChevronDown, Layout, Box, Video, X, Plus, FileText, Link as LinkIcon, Save, PlusCircle, Upload, CheckCircle, Loader2, LayoutDashboard, ArrowLeft, Pencil, Users, Activity, Signal, Search, TrendingUp, Shield, RefreshCw, Zap, Crown, Image as ImageIcon
+  Trash2, LogOut, ChevronDown, Layout, Box, Video, X, Plus, FileText, Link as LinkIcon, Save, PlusCircle, Upload, CheckCircle, Loader2, LayoutDashboard, ArrowLeft, Pencil, Users, Activity, Signal, Search, TrendingUp, Shield, RefreshCw, Zap, Crown, Image as ImageIcon, BookOpen, Wrench, Folder
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase, ADMIN_EMAIL } from '../lib/supabase';
@@ -98,11 +98,13 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
   
   const [newToolName, setNewToolName] = useState('');
   const [newToolUrl, setNewToolUrl] = useState('');
+  const [newToolPremium, setNewToolPremium] = useState(false);
   const [savingTool, setSavingTool] = useState(false);
   
   const [newExtensionName, setNewExtensionName] = useState('');
   const [newExtensionUrl, setNewExtensionUrl] = useState('');
   const [newExtensionDesc, setNewExtensionDesc] = useState('');
+  const [newExtensionPremium, setNewExtensionPremium] = useState(false);
   const [savingExtension, setSavingExtension] = useState(false);
 
   useEffect(() => {
@@ -339,19 +341,76 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
     }
   }
 
+  const toggleUserPermission = async (userId: string, field: 'tiene_acceso_cursos' | 'tiene_acceso_nichos' | 'tiene_acceso_herramientas' | 'tiene_acceso_extensiones', currentValue: boolean) => {
+    const newVal = !currentValue;
+    // Optimistic state update
+    setUsersList(prev => prev.map(u => u.id === userId ? { ...u, [field]: newVal } : u));
+    
+    const { error } = await supabase
+      .from('profiles')
+      .update({ [field]: newVal })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('Error updating permission:', error);
+      showNotify('error', 'Error al actualizar permisos');
+      // Revert on error
+      setUsersList(prev => prev.map(u => u.id === userId ? { ...u, [field]: currentValue } : u));
+    } else {
+      showNotify('success', 'PERMISOS ACTUALIZADOS');
+    }
+  };
+
+  const toggleToolPremium = async (toolId: string, current: boolean) => {
+    const newVal = !current;
+    setTools(prev => prev.map(t => t.id === toolId ? { ...t, es_premium: newVal } : t));
+    
+    const { error } = await supabase
+      .from('tools')
+      .update({ es_premium: newVal })
+      .eq('id', toolId);
+
+    if (error) {
+      console.error('Error toggling tool premium status:', error);
+      showNotify('error', 'Error al actualizar estado');
+      setTools(prev => prev.map(t => t.id === toolId ? { ...t, es_premium: current } : t));
+    } else {
+      showNotify('success', 'ESTADO ACTUALIZADO');
+    }
+  };
+
+  const toggleExtensionPremium = async (extId: string, current: boolean) => {
+    const newVal = !current;
+    setExtensions(prev => prev.map(e => e.id === extId ? { ...e, es_premium: newVal } : e));
+    
+    const { error } = await supabase
+      .from('extensions')
+      .update({ es_premium: newVal })
+      .eq('id', extId);
+
+    if (error) {
+      console.error('Error toggling extension premium status:', error);
+      showNotify('error', 'Error al actualizar estado');
+      setExtensions(prev => prev.map(e => e.id === extId ? { ...e, es_premium: current } : e));
+    } else {
+      showNotify('success', 'ESTADO ACTUALIZADO');
+    }
+  };
+
   async function addTool() {
     if (!newToolName.trim() || !newToolUrl.trim()) return;
     setSavingTool(true);
     try {
       const { data, error } = await supabase
         .from('tools')
-        .insert([{ name: newToolName.trim(), url: newToolUrl.trim() }])
+        .insert([{ name: newToolName.trim(), url: newToolUrl.trim(), es_premium: newToolPremium }])
         .select();
       
       if (error) throw error;
       if (data) setTools([data[0], ...tools]);
       setNewToolName('');
       setNewToolUrl('');
+      setNewToolPremium(false);
       showNotify('success', 'HERRAMIENTA AÑADIDA');
     } catch (err: any) {
       alert(err.message);
@@ -369,7 +428,8 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
         .insert([{ 
             name: newExtensionName.trim(),
             url: newExtensionUrl.trim(),
-            description: newExtensionDesc.trim() || null
+            description: newExtensionDesc.trim() || null,
+            es_premium: newExtensionPremium
         }])
         .select();
       
@@ -378,6 +438,7 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
       setNewExtensionName('');
       setNewExtensionUrl('');
       setNewExtensionDesc('');
+      setNewExtensionPremium(false);
       showNotify('success', 'EXTENSIÓN AÑADIDA');
     } catch (err: any) {
       alert(err.message);
@@ -681,7 +742,8 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
                                       <tr className="border-b border-white/5 bg-white/[0.02]">
                                           <th className="p-6 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Usuario</th>
                                           <th className="p-6 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Rol</th>
-                                          <th className="p-6 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 w-1/3">Progreso</th>
+                                          <th className="p-6 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 w-1/4">Progreso</th>
+                                          <th className="p-6 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Accesos Permitidos</th>
                                           <th className="p-6 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 text-right">Estado</th>
                                       </tr>
                                   </thead>
@@ -717,6 +779,13 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
                                                           <div className="h-full rounded-full bg-white w-full"></div>
                                                       </div>
                                                       <div className="text-[9px] font-bold text-black/60 mt-1 text-right">SISTEMA CONTROL TOTAL</div>
+                                                  </div>
+                                              </td>
+                                              <td className="p-6">
+                                                  <div className="flex items-center gap-2">
+                                                      <span className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-black/40 border border-yellow-600/40 text-black text-[10px] font-black uppercase whitespace-nowrap tracking-wide leading-none">
+                                                          <Crown size={12} fill="currentColor" className="text-black"/> ACCESO TOTAL (MASTER)
+                                                      </span>
                                                   </div>
                                               </td>
                                               <td className="p-6 text-right">
@@ -769,6 +838,65 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
                                                           <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
                                                               <div className={`h-full rounded-full ${progressPercent === 100 ? 'bg-green-500' : 'bg-white'}`} style={{ width: `${progressPercent}%` }}></div>
                                                           </div>
+                                                      </div>
+                                                  </td>
+                                                  <td className="p-6">
+                                                      <div className="flex flex-wrap items-center gap-1.5 max-w-md">
+                                                          {/* Cursos access */}
+                                                          <button 
+                                                            onClick={() => toggleUserPermission(u.id, 'tiene_acceso_cursos', !!u.tiene_acceso_cursos)}
+                                                            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-[9px] font-black uppercase transition-all duration-300 ${
+                                                              u.tiene_acceso_cursos 
+                                                                ? 'bg-red-600/10 border-red-600/35 text-white' 
+                                                                : 'bg-zinc-900/60 border-white/5 text-zinc-600 hover:text-zinc-500 hover:bg-zinc-900'
+                                                            }`}
+                                                            title="Permitir acceso al área de Cursos (Hotmart)"
+                                                          >
+                                                              <BookOpen size={10} className={u.tiene_acceso_cursos ? 'text-red-500' : 'text-zinc-700'} />
+                                                              CURSOS
+                                                          </button>
+
+                                                          {/* Nichos access */}
+                                                          <button 
+                                                            onClick={() => toggleUserPermission(u.id, 'tiene_acceso_nichos', !!u.tiene_acceso_nichos)}
+                                                            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-[9px] font-black uppercase transition-all duration-300 ${
+                                                              u.tiene_acceso_nichos 
+                                                                ? 'bg-red-600/10 border-red-600/35 text-white' 
+                                                                : 'bg-zinc-900/60 border-white/5 text-zinc-600 hover:text-zinc-500 hover:bg-zinc-900'
+                                                            }`}
+                                                            title="Permitir acceso al área de Nichos Ganadores"
+                                                          >
+                                                              <Folder size={10} className={u.tiene_acceso_nichos ? 'text-red-500' : 'text-zinc-700'} />
+                                                              NICHOS
+                                                          </button>
+
+                                                          {/* Herramientas access */}
+                                                          <button 
+                                                            onClick={() => toggleUserPermission(u.id, 'tiene_acceso_herramientas', !!u.tiene_acceso_herramientas)}
+                                                            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-[9px] font-black uppercase transition-all duration-300 ${
+                                                              u.tiene_acceso_herramientas 
+                                                                ? 'bg-red-600/10 border-red-600/35 text-white' 
+                                                                : 'bg-zinc-900/60 border-white/5 text-zinc-600 hover:text-zinc-500 hover:bg-zinc-900'
+                                                            }`}
+                                                            title="Permitir acceso premium ilimitado a Herramientas"
+                                                          >
+                                                              <Wrench size={10} className={u.tiene_acceso_herramientas ? 'text-red-500' : 'text-zinc-700'} />
+                                                              TOOLS
+                                                          </button>
+
+                                                          {/* Extensiones access */}
+                                                          <button 
+                                                            onClick={() => toggleUserPermission(u.id, 'tiene_acceso_extensiones', !!u.tiene_acceso_extensiones)}
+                                                            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-[9px] font-black uppercase transition-all duration-300 ${
+                                                              u.tiene_acceso_extensiones 
+                                                                ? 'bg-red-600/10 border-red-600/35 text-white' 
+                                                                : 'bg-zinc-900/60 border-white/5 text-zinc-600 hover:text-zinc-500 hover:bg-zinc-900'
+                                                            }`}
+                                                            title="Permitir acceso premium ilimitado a Extensiones"
+                                                          >
+                                                              <PlusCircle size={10} className={u.tiene_acceso_extensiones ? 'text-red-500' : 'text-zinc-700'} />
+                                                              EXTS
+                                                          </button>
                                                       </div>
                                                   </td>
                                                   <td className="p-6 text-right">
@@ -888,6 +1016,21 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
                                   className="flex-1 bg-black border border-white/10 rounded-xl px-6 py-4 text-sm font-bold text-white focus:border-red-600 outline-none transition-colors"
                               />
                           </div>
+
+                          {/* Premium toggle checkbox */}
+                          <div className="flex items-center gap-3 bg-black border border-white/5 p-4 rounded-xl">
+                              <input 
+                                  type="checkbox" 
+                                  id="newToolPremium"
+                                  checked={newToolPremium} 
+                                  onChange={e => setNewToolPremium(e.target.checked)} 
+                                  className="w-4 h-4 rounded accent-red-600 bg-black border-white/10 text-white cursor-pointer"
+                              />
+                              <label htmlFor="newToolPremium" className="text-xs font-black uppercase text-zinc-400 cursor-pointer select-none">
+                                  ¿Es recurso PREMIUM de pago? (Alumnos con acceso "TOOLS" habilitado podrán usarla)
+                              </label>
+                          </div>
+
                           <button 
                               onClick={addTool}
                               disabled={savingTool || !newToolName.trim() || !newToolUrl.trim()}
@@ -898,10 +1041,23 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
 
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                               {tools.map(tool => (
-                                  <div key={tool.id} className="p-4 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-between">
-                                      <div className="truncate">
-                                          <p className="text-sm font-bold text-white">{tool.name}</p>
-                                          <p className="text-[10px] text-zinc-500 truncate">{tool.url}</p>
+                                  <div key={tool.id} className="p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between gap-4">
+                                      <div className="truncate flex-1">
+                                          <div className="flex items-center gap-2 mb-1">
+                                              <p className="text-sm font-bold text-white truncate">{tool.name}</p>
+                                              <button 
+                                                onClick={() => toggleToolPremium(tool.id, !!tool.es_premium)}
+                                                className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider transition-all ${
+                                                  tool.es_premium 
+                                                    ? 'bg-red-600/20 text-red-500 border border-red-600/30 hover:bg-red-600/30' 
+                                                    : 'bg-zinc-850 text-zinc-500 border border-white/5 hover:bg-zinc-800'
+                                                }`}
+                                                title="Hacer clic para cambiar entre PREMIUM/FREE"
+                                              >
+                                                  {tool.es_premium ? 'PREMIUM' : 'FREE'}
+                                              </button>
+                                          </div>
+                                          <p className="text-[10px] text-zinc-500 truncate font-mono">{tool.url}</p>
                                       </div>
                                       <button onClick={() => handleDelete('tools', tool.id)} className="text-zinc-600 hover:text-red-500 p-2"><Trash2 size={16}/></button>
                                   </div>
@@ -943,6 +1099,21 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
                                 rows={2}
                                 className="w-full bg-black border border-white/10 rounded-xl px-6 py-4 text-sm font-bold text-white focus:border-red-600 outline-none transition-colors resize-none"
                           />
+
+                          {/* Premium toggle checkbox */}
+                          <div className="flex items-center gap-3 bg-black border border-white/5 p-4 rounded-xl">
+                              <input 
+                                  type="checkbox" 
+                                  id="newExtensionPremium"
+                                  checked={newExtensionPremium} 
+                                  onChange={e => setNewExtensionPremium(e.target.checked)} 
+                                  className="w-4 h-4 rounded accent-red-600 bg-black border-white/10 text-white cursor-pointer"
+                              />
+                              <label htmlFor="newExtensionPremium" className="text-xs font-black uppercase text-zinc-400 cursor-pointer select-none">
+                                  ¿Es extensión PREMIUM de pago? (Alumnos con acceso "EXTENSIONES" habilitado podrán descargarla)
+                              </label>
+                          </div>
+
                           <button 
                               onClick={addExtension}
                               disabled={savingExtension || !newExtensionName.trim() || !newExtensionUrl.trim()}
@@ -953,10 +1124,23 @@ const AdminPage = ({ user, onLogout }: { user: User, onLogout: () => void }) => 
 
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                               {extensions.map(ext => (
-                                  <div key={ext.id} className="p-4 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-between">
-                                      <div className="truncate">
-                                          <p className="text-sm font-bold text-white">{ext.name}</p>
-                                          <p className="text-[10px] text-zinc-500 truncate">{ext.url}</p>
+                                  <div key={ext.id} className="p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between gap-4">
+                                      <div className="truncate flex-1">
+                                          <div className="flex items-center gap-2 mb-1">
+                                              <p className="text-sm font-bold text-white truncate">{ext.name}</p>
+                                              <button 
+                                                onClick={() => toggleExtensionPremium(ext.id, !!ext.es_premium)}
+                                                className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider transition-all ${
+                                                  ext.es_premium 
+                                                    ? 'bg-red-600/20 text-red-500 border border-red-600/30 hover:bg-red-600/30' 
+                                                    : 'bg-zinc-850 text-zinc-500 border border-white/5 hover:bg-zinc-800'
+                                                }`}
+                                                title="Hacer clic para cambiar entre PREMIUM/FREE"
+                                              >
+                                                  {ext.es_premium ? 'PREMIUM' : 'FREE'}
+                                              </button>
+                                          </div>
+                                          <p className="text-[10px] text-zinc-500 truncate font-mono">{ext.url}</p>
                                       </div>
                                       <button onClick={() => handleDelete('extensions', ext.id)} className="text-zinc-600 hover:text-red-500 p-2"><Trash2 size={16}/></button>
                                   </div>

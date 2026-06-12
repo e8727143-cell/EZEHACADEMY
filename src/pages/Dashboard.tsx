@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Play, FileText, ChevronDown, Lock, LogOut, Menu, X, Zap, ExternalLink, Home, 
+  Play, FileText, ChevronDown, Lock, LogOut, Menu, X, Zap, ExternalLink, Home, User as UserIcon, Send, MessageCircle,
   Check, Award, Star, Crown, ChevronRight, ChevronLeft,
   Shield, CheckSquare, Square, Download, ArrowLeft, Settings, BookOpen, Laptop,
   Youtube, Plus, Trash2, Loader2, Folder
@@ -18,7 +18,7 @@ interface DashboardProps {
 }
 
 type Rank = "Novato" | "Creador" | "Maestro";
-type ViewState = 'HOME' | 'COURSE' | 'MODULE' | 'PLAYER' | 'NICHES' | 'COURSES' | 'TOOLS' | 'EXTENSIONS';
+type ViewState = 'HOME' | 'COURSE' | 'MODULE' | 'PLAYER' | 'NICHES' | 'COURSES' | 'TOOLS' | 'EXTENSIONS' | 'PROFILE';
 
 // --- CUSTOM STYLES ---
 const CUSTOM_STYLES = `
@@ -118,6 +118,52 @@ const CUSTOM_STYLES = `
   }
 `;
 
+const PermissionPaywall = ({ title, description, badge, linkText, linkUrl }: { title: string, description: string, badge: string, linkText: string, linkUrl?: string }) => {
+  return (
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="max-w-xl mx-auto my-12 p-8 bg-zinc-950/80 border border-red-650/30 rounded-3xl text-center space-y-6 shadow-[0_0_50px_rgba(234,42,51,0.15)] relative overflow-hidden"
+    >
+      <div className="absolute top-0 right-0 w-32 h-32 bg-red-600/5 blur-[50px] rounded-full pointer-events-none" />
+      <div className="w-16 h-16 bg-red-600/10 border border-red-600/25 rounded-full flex items-center justify-center mx-auto text-red-500 shadow-xl shadow-red-600/5 mb-2">
+          <Lock size={26} className="animate-pulse" />
+      </div>
+      <div className="space-y-2">
+          <span className="text-[10px] font-black bg-red-600/20 text-red-500 px-3 py-1 rounded-full uppercase tracking-widest">{badge}</span>
+          <h3 className="text-2xl font-black text-white uppercase tracking-tight italic pt-2">{title}</h3>
+          <p className="text-xs text-zinc-400 font-medium leading-relaxed max-w-md mx-auto">{description}</p>
+      </div>
+      <div className="pt-4 flex flex-col gap-3 max-w-sm mx-auto">
+          {linkUrl ? (
+              <a 
+                href={linkUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-4 bg-white text-black hover:bg-zinc-200 transition-all rounded-xl font-black uppercase text-[10px] tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-white/5"
+              >
+                  {linkText} <ExternalLink size={14} />
+              </a>
+          ) : (
+              <div 
+                className="w-full py-4 bg-zinc-900 border border-white/5 text-zinc-500 rounded-xl font-black uppercase text-[10px] tracking-wider"
+              >
+                  Sujeto a Permiso de Administrador
+              </div>
+          )}
+          <a
+            href="https://wa.me/34600000000"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[10px] text-zinc-600 hover:text-zinc-400 uppercase tracking-widest transition-all font-black pt-1"
+          >
+              ¿Ya realizaste tu pago? Contactar a soporte
+          </a>
+      </div>
+    </motion.div>
+  );
+};
+
 const MODULE_IMAGES = [
     "https://lh3.googleusercontent.com/aida-public/AB6AXuAj0Q2RlKwJAsYw_hTo7o6PB7e8FJfAJLU5k4e57mb0DExb8strcQkw8O5sy5eh3p4WeIGj5eCeRHLyxGReQF5DcilDsFNr0OZ5CquGAMk_QuulXs187LO77ifjt5HSVOpIJfBXS-LIGt4z69HFqv9VDV8cNpF5Kd59-gnWE5BfzZ8hW-cRMtYRwa5k-JbnwYxNoqUiDcEG-q_FKeIvtAJ3agt1tBGPwRZ-yQUrjKrxiCy6E6TYNvZS9ZeER8px43yxb4vPuaJhdw0",
     "https://lh3.googleusercontent.com/aida-public/AB6AXuB_HbHRxFzmfmIRtKTXkWbcv0OVqKzhaZKuy1nXlyOSs9A5HsyxKJpmTTVNQLlU46AEJJXDXAATWj3YwV7Sr8Au2drVjCpwlicRC0BZyTLoq62dnRzD2U-gT3Vu772Nb3sB9-_rtXqpI0V-QAvJf73n84GabpCJIsl7_GjTqSiIylgA5ztDcT0HIiA50uEp21NrxpQuA28utjs2qWMN9w81YczGvDGEtilO-kwyz3xdYItCEaux8b4OOfdAiVE4AUdDjza8XQ1j9Ys",
@@ -173,7 +219,27 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
 
+  // Profile Chat State
+  const [chatMessages, setChatMessages] = useState<{role: 'user' | 'assistant' | 'system', content: string}[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+
   const isAdmin = user.role === 'admin';
+  const canAccessCourses = isAdmin || !!user.tiene_acceso_cursos;
+  const canAccessNiches = isAdmin || !!user.tiene_acceso_nichos;
+  const canAccessTools = isAdmin || !!user.tiene_acceso_herramientas;
+  const canAccessExtensions = isAdmin || !!user.tiene_acceso_extensiones;
+
+  // Tools and Extensions visual feedback toast status
+  const [toolsLockMessage, setToolsLockMessage] = useState<string | null>(null);
+
+  // Auto-dismiss tools lock message after 4s
+  useEffect(() => {
+    if (toolsLockMessage) {
+      const timer = setTimeout(() => setToolsLockMessage(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toolsLockMessage]);
 
   useEffect(() => {
     const init = async () => {
@@ -188,6 +254,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     if (activeLesson) fetchLessonRating(activeLesson.id);
     else setUserRating(0);
   }, [activeLesson]);
+
+  // Initial prompt for EZEH PROFILE
+  useEffect(() => {
+    if (viewState === 'PROFILE' && chatMessages.length === 0) {
+      setChatMessages([
+        { role: 'system', content: 'Eres una IA experta en marketing y audiencia para Ezeh Academy. Tu objetivo es ayudar al usuario a definir el perfil detallado de su audiencia y su tipo de avatar ideal basándote en la información que el usuario te proporcione. Sé profesional, analítico y creativo.' },
+        { role: 'assistant', content: '¡Hola! Soy tu asistente de EZEH PROFILE. Cuéntame sobre tu proyecto o lo que tienes en mente, y juntos definiremos el perfil ideal de tu audiencia y el tipo de avatar para tus campañas.' }
+      ]);
+    }
+  }, [viewState]);
 
   async function fetchCourses() {
     const { data, error } = await supabase
@@ -291,6 +367,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
   // --- NAVIGATION HANDLERS ---
   const handleCourseSelect = (course: any) => {
+    if (!canAccessCourses) return;
     setActiveCourse(course);
     setViewState('COURSE');
   };
@@ -520,6 +597,35 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     }
   }, [activeLessonId, activeVideoUrl]);
 
+  const sendMessage = async () => {
+    if (!chatInput.trim() || isChatLoading) return;
+    
+    const userMessage = { role: 'user' as const, content: chatInput };
+    const newMessages = [...chatMessages, userMessage];
+    setChatMessages(newMessages);
+    setChatInput('');
+    setIsChatLoading(true);
+    
+    try {
+        const response = await fetch('/api/profile-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: newMessages })
+        });
+        
+        const data = await response.json();
+        if (data.choices && data.choices[0].message) {
+            setChatMessages([...newMessages, data.choices[0].message]);
+        } else if (data.error) {
+            setChatMessages([...newMessages, { role: 'assistant', content: `Error: ${data.error}` }]);
+        }
+    } catch (error: any) {
+        setChatMessages([...newMessages, { role: 'assistant', content: `Error de conexión: ${error.message}` }]);
+    } finally {
+        setIsChatLoading(false);
+    }
+  };
+
   const resolvedVideoUrl = useMemo(() => {
     if (!activeVideoUrl) return '';
     if (activeVideoUrl.includes('mediadelivery.net')) {
@@ -601,29 +707,41 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                     >
                         <div className="flex items-center justify-between relative z-10">
                             <div className="flex-1 min-w-0">
-                                <h3 className="text-sm font-black uppercase truncate text-white">CURSOS</h3>
+                                <div className="flex flex-col gap-0.5">
+                                    <h3 className="text-sm font-black uppercase truncate text-white">CURSOS</h3>
+                                    {!canAccessCourses && (
+                                        <span className="text-[7px] text-zinc-300 font-black tracking-wider flex items-center gap-1">
+                                            <Lock size={7} /> ADQUIRIR EN HOTMART
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                             {(viewState === 'COURSES' || viewState === 'COURSE' || viewState === 'MODULE' || viewState === 'PLAYER') && <ChevronRight size={18} className="text-white"/>}
                         </div>
                     </div>
 
-                    {/* NICHES BUTTON */}
-                    {isAdmin && (
-                        <div onClick={() => { setViewState('NICHES'); setActiveCourse(null); setActiveModule(null); setActiveLesson(null); }} 
-                            className={`relative overflow-hidden p-5 rounded-2xl border transition-all cursor-pointer group ${
-                                viewState === 'NICHES'
-                                    ? 'bg-gradient-to-br from-white/20 to-white/5 border-white/40 shadow-[0_0_20px_rgba(255,255,255,0.1)]' 
-                                    : 'bg-gradient-to-br from-red-600 to-red-800 border-white/20 hover:border-white/40 hover:from-red-500 hover:to-red-700 shadow-[0_0_15px_rgba(234,42,51,0.2)]'
-                            }`}
-                        >
-                            <div className="flex items-center justify-between relative z-10">
-                                <div className="flex-1 min-w-0">
-                                    <h3 className="text-sm font-black uppercase truncate text-white">NICHOS</h3>
+                    {/* NICHOS BUTTON */}
+                    <div onClick={() => { setViewState('NICHES'); setActiveCourse(null); setActiveModule(null); setActiveLesson(null); }} 
+                        className={`relative overflow-hidden p-5 rounded-2xl border transition-all cursor-pointer group ${
+                            viewState === 'NICHES'
+                                ? 'bg-gradient-to-br from-white/20 to-white/5 border-white/40 shadow-[0_0_20px_rgba(255,255,255,0.1)]' 
+                                : 'bg-gradient-to-br from-red-600 to-red-800 border-white/20 hover:border-white/40 hover:from-red-500 hover:to-red-700 shadow-[0_0_15px_rgba(234,42,51,0.2)]'
+                        }`}
+                    >
+                        <div className="flex items-center justify-between relative z-10">
+                            <div className="flex-1 min-w-0">
+                                <div className="flex flex-col gap-0.5">
+                                    <h3 className="text-sm font-black uppercase truncate text-white">NICHOS GANADORES</h3>
+                                    {!canAccessNiches && (
+                                        <span className="text-[7px] text-zinc-300 font-black tracking-wider flex items-center gap-1">
+                                            <Lock size={7} /> ACCESO VIP DE PAGO
+                                        </span>
+                                    )}
                                 </div>
-                                {viewState === 'NICHES' && <ChevronRight size={18} className="text-white"/>}
                             </div>
+                            {viewState === 'NICHES' && <ChevronRight size={18} className="text-white"/>}
                         </div>
-                    )}
+                    </div>
 
                     {/* TOOLS BUTTON */}
                     <div onClick={() => { setViewState('TOOLS'); setActiveCourse(null); setActiveModule(null); setActiveLesson(null); }} 
@@ -635,7 +753,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                     >
                         <div className="flex items-center justify-between relative z-10">
                             <div className="flex-1 min-w-0">
-                                <h3 className="text-sm font-black uppercase truncate text-white">HERRAMIENTAS</h3>
+                                <div className="flex flex-col gap-0.5">
+                                    <h3 className="text-sm font-black uppercase truncate text-white">HERRAMIENTAS</h3>
+                                    {!canAccessTools ? (
+                                        <span className="text-[7px] text-zinc-300 font-bold tracking-wider flex items-center gap-1">
+                                            <Lock size={7} /> ALGUNAS BLOQUEADAS
+                                        </span>
+                                    ) : (
+                                        <span className="text-[7px] text-emerald-300 font-extrabold tracking-wider flex items-center gap-1">
+                                            ★ PREMIUM UNLOCKED
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                             {viewState === 'TOOLS' && <ChevronRight size={18} className="text-white"/>}
                         </div>
@@ -651,9 +780,37 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                     >
                         <div className="flex items-center justify-between relative z-10">
                             <div className="flex-1 min-w-0">
-                                <h3 className="text-sm font-black uppercase truncate text-white">EXTENSIONES</h3>
+                                <div className="flex flex-col gap-0.5">
+                                    <h3 className="text-sm font-black uppercase truncate text-white">EXTENSIONES</h3>
+                                    {!canAccessExtensions ? (
+                                        <span className="text-[7px] text-zinc-300 font-bold tracking-wider flex items-center gap-1">
+                                            <Lock size={7} /> ALGUNAS BLOQUEADAS
+                                        </span>
+                                    ) : (
+                                        <span className="text-[7px] text-emerald-300 font-extrabold tracking-wider flex items-center gap-1">
+                                            ★ PREMIUM UNLOCKED
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                             {viewState === 'EXTENSIONS' && <ChevronRight size={18} className="text-white"/>}
+                        </div>
+                    </div>
+
+                    {/* PROFILE BUTTON */}
+                    <div onClick={() => { setViewState('PROFILE'); setActiveCourse(null); setActiveModule(null); setActiveLesson(null); }} 
+                        className={`relative overflow-hidden p-5 rounded-2xl border transition-all cursor-pointer group ${
+                            viewState === 'PROFILE'
+                                ? 'bg-gradient-to-br from-white/20 to-white/5 border-white/40 shadow-[0_0_20px_rgba(255,255,255,0.1)]' 
+                                : 'bg-gradient-to-br from-red-600 to-red-800 border-white/20 hover:border-white/40 hover:from-red-500 hover:to-red-700 shadow-[0_0_15px_rgba(234,42,51,0.2)]'
+                        }`}
+                    >
+                        <div className="flex items-center justify-between relative z-10">
+                            <div className="flex-1 min-w-0 flex items-center gap-3">
+                                <UserIcon size={18} className="text-white"/>
+                                <h3 className="text-sm font-black uppercase truncate text-white">EZEH PROFILE</h3>
+                            </div>
+                            {viewState === 'PROFILE' && <ChevronRight size={18} className="text-white"/>}
                         </div>
                     </div>
                 </div>
@@ -707,7 +864,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                           )}
                       </div>
                       <h1 className="text-white font-black italic tracking-widest text-lg uppercase drop-shadow-md text-right">
-                         {viewState === 'HOME' ? 'PANEL HOME' : viewState === 'COURSES' || viewState === 'COURSE' || viewState === 'MODULE' || viewState === 'PLAYER' ? 'CURSOS' : viewState === 'NICHES' ? 'NICHOS GANADORES' : viewState === 'TOOLS' ? 'HERRAMIENTAS' : viewState === 'EXTENSIONS' ? 'EXTENSIONES' : ''}
+                         {viewState === 'HOME' ? 'PANEL HOME' : viewState === 'COURSES' || viewState === 'COURSE' || viewState === 'MODULE' || viewState === 'PLAYER' ? 'CURSOS' : viewState === 'NICHES' ? 'NICHOS GANADORES' : viewState === 'TOOLS' ? 'HERRAMIENTAS' : viewState === 'EXTENSIONS' ? 'EXTENSIONES' : viewState === 'PROFILE' ? 'EZEH PROFILE' : ''}
                       </h1>
                   </div>
               </motion.div>
@@ -715,7 +872,72 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
           </AnimatePresence>
 
           <main className="flex-1 overflow-y-auto custom-scrollbar p-0 relative">
-                         {/* === VIEW: HOME (LOBBY) === */}
+                         {/* === VIEW: PROFILE (IA CHAT) === */}
+             {viewState === 'PROFILE' && (
+                <motion.div initial={{opacity: 0}} animate={{opacity: 1}} className="h-[calc(100vh-68px)] flex flex-col p-6 lg:p-12">
+                    <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col bg-[#0a0a0a] border border-white/5 rounded-3xl overflow-hidden shadow-2xl">
+                        {/* Chat area */}
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+                            {chatMessages.filter(m => m.role !== 'system').map((m, i) => (
+                                <motion.div 
+                                    key={i} 
+                                    initial={{ opacity: 0, x: m.role === 'user' ? 20 : -20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                                >
+                                    <div className={`max-w-[80%] p-4 rounded-2xl border ${
+                                        m.role === 'user' 
+                                            ? 'bg-red-600/10 border-red-600/30 text-white rounded-tr-none' 
+                                            : 'bg-white/5 border-white/10 text-zinc-300 rounded-tl-none'
+                                    }`}>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            {m.role === 'user' ? (
+                                                <div className="w-5 h-5 rounded-full bg-red-600 flex items-center justify-center text-[10px] font-bold text-white">YO</div>
+                                            ) : (
+                                                <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-red-500"><Zap size={10} fill="currentColor"/></div>
+                                            )}
+                                            <span className="text-[10px] font-black uppercase tracking-widest opacity-50">{m.role === 'user' ? 'Tú' : 'EZEH AI'}</span>
+                                        </div>
+                                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.content}</p>
+                                    </div>
+                                </motion.div>
+                            ))}
+                            {isChatLoading && (
+                                <div className="flex justify-start">
+                                    <div className="bg-white/5 border border-white/10 p-4 rounded-2xl rounded-tl-none flex items-center gap-2">
+                                        <Loader2 size={16} className="animate-spin text-red-500"/>
+                                        <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">EZEH AI está analizando...</span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Input area */}
+                        <div className="p-6 bg-black/40 border-t border-white/5">
+                            <div className="relative flex items-center">
+                                <input 
+                                    type="text" 
+                                    value={chatInput}
+                                    onChange={e => setChatInput(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && sendMessage()}
+                                    placeholder="Describe tu audiencia o haz una pregunta..."
+                                    className="w-full bg-[#121212] border border-white/10 p-5 rounded-2xl text-white font-bold outline-none focus:border-red-600 placeholder:text-zinc-800 transition-all pr-16"
+                                />
+                                <button 
+                                    onClick={sendMessage}
+                                    disabled={!chatInput.trim() || isChatLoading}
+                                    className="absolute right-3 p-3 bg-red-600 rounded-xl text-white hover:bg-red-500 disabled:opacity-50 disabled:hover:bg-red-600 transition-all shadow-lg shadow-red-600/20"
+                                >
+                                    <Send size={18}/>
+                                </button>
+                            </div>
+                            <p className="mt-3 text-[10px] text-center font-black uppercase tracking-[0.2em] text-zinc-700">Analizador de Audiencia por EZEH Academy</p>
+                        </div>
+                    </div>
+                </motion.div>
+             )}
+             
+             {/* === VIEW: HOME (LOBBY) === */}
              {viewState === 'HOME' && (
                 <motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} className="space-y-8 p-6 lg:p-12">
                    {/* MASTER ADMIN BADGE AT THE LEFT - PEGGED CLOSE TO THE GREETING CONTAINER */}
@@ -764,203 +986,266 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
              {/* === VIEW: COURSES LIST (CATALOG GRID) === */}
              {viewState === 'COURSES' && (
                 <motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} className="space-y-8 p-6 lg:p-12">
-                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-2 max-w-7xl mx-auto">
-                       {courses.map(course => (
-                           <div 
-                               key={course.id} 
-                               onClick={() => handleCourseSelect(course)}
-                               className="group relative cursor-pointer flex flex-col w-full transition-transform duration-300 hover:-translate-y-1"
-                           >
-                               {/* The Square Cover */}
-                               <div className="aspect-square w-full rounded-2xl overflow-hidden border border-white/5 bg-zinc-950 group-hover:border-red-600/40 transition-all shadow-2xl relative flex-shrink-0">
-                                   <img 
-                                       src={getDirectImageUrl(course.thumbnail) || "https://picsum.photos/seed/course/800/450"}
-                                       alt={course.title}
-                                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                                       referrerPolicy={course.thumbnail?.includes('imgur.com') ? "no-referrer" : undefined}
-                                       onError={(e) => {
-                                           if (!course.thumbnail?.includes('picsum.photos')) {
-                                               (e.target as HTMLImageElement).src = "https://picsum.photos/seed/course/800/450";
-                                           }
-                                       }}
-                                   />
-                               </div>
+                    {!canAccessCourses ? (
+                        <PermissionPaywall 
+                            badge="ACCESO RESTRINGIDO"
+                            title="Área de Cursos Bloqueada"
+                            description="Esta sección contiene el entrenamiento estratégico paso a paso de Ezeh Academy. Requiere haber realizado el pago correspondiente en la plataforma Hotmart para registrar tu matrícula."
+                            linkText="ADQUIRIR ACCESO COMPLETO"
+                            linkUrl="https://hotmart.com"
+                        />
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-2 max-w-7xl mx-auto">
+                            {courses.map(course => (
+                                <div 
+                                    key={course.id} 
+                                    onClick={() => handleCourseSelect(course)}
+                                    className="group relative cursor-pointer flex flex-col w-full transition-transform duration-300 hover:-translate-y-1"
+                                >
+                                    {/* The Square Cover */}
+                                    <div className="aspect-square w-full rounded-2xl overflow-hidden border border-white/5 bg-zinc-950 group-hover:border-red-600/40 transition-all shadow-2xl relative flex-shrink-0">
+                                        <img 
+                                            src={getDirectImageUrl(course.thumbnail) || "https://picsum.photos/seed/course/800/450"}
+                                            alt={course.title}
+                                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                                            referrerPolicy={course.thumbnail?.includes('imgur.com') ? "no-referrer" : undefined}
+                                            onError={(e) => {
+                                                if (!course.thumbnail?.includes('picsum.photos')) {
+                                                    (e.target as HTMLImageElement).src = "https://picsum.photos/seed/course/800/450";
+                                                }
+                                            }}
+                                        />
+                                    </div>
 
-                               {/* Course title and module badge now below the image as a button-like container */}
-                               <div className="mt-4 bg-[#0a0a0a]/80 backdrop-blur-md border border-white/10 px-5 py-3 rounded-2xl shadow-xl flex items-center justify-between gap-3 transition-all group-hover:border-red-600/50 group-hover:bg-gradient-to-r group-hover:from-red-600/20 group-hover:to-red-900/10">
-                                   <span className="text-[11px] font-black uppercase tracking-wide text-white truncate flex-1">
-                                       {course.title}
-                                   </span>
-                                   <div className="bg-gradient-to-br from-red-600 to-red-800 px-3 py-1.5 rounded-lg shadow-lg shadow-red-600/20 flex-shrink-0">
-                                       <span className="text-[10px] font-black text-white uppercase tracking-widest whitespace-nowrap">
-                                           {course.modules?.length || 0} MOD
-                                       </span>
-                                   </div>
-                               </div>
-                           </div>
-                       ))}
-                   </div>
+                                    {/* Course title and module badge now below the image as a button-like container */}
+                                    <div className="mt-4 bg-[#0a0a0a]/80 backdrop-blur-md border border-white/10 px-5 py-3 rounded-2xl shadow-xl flex items-center justify-between gap-3 transition-all group-hover:border-red-600/50 group-hover:bg-gradient-to-r group-hover:from-red-600/20 group-hover:to-red-900/10">
+                                        <span className="text-[11px] font-black uppercase tracking-wide text-white truncate flex-1">
+                                            {course.title}
+                                        </span>
+                                        <div className="bg-gradient-to-br from-red-600 to-red-800 px-3 py-1.5 rounded-lg shadow-lg shadow-red-600/20 flex-shrink-0">
+                                            <span className="text-[10px] font-black text-white uppercase tracking-widest whitespace-nowrap">
+                                                {course.modules?.length || 0} MOD
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </motion.div>
              )}
 
              {/* === VIEW: NICHES === */}
              {viewState === 'NICHES' && (
                 <motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} className="h-full flex flex-col">
-                    {/* Scrollable List */}
-                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-12 pt-12">
-                        <div className="max-w-7xl mx-auto w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {niches.map(niche => (
-                                <motion.div 
-                                    layout
-                                    key={niche.id} 
-                                    initial={{ opacity: 0, scale: 0.95 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    className="group relative bg-[#0a0a0a] border border-white/5 p-6 rounded-2xl hover:border-red-600/30 transition-all flex flex-col gap-6"
-                                >
-                                    {/* Info Panel */}
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/10 flex-shrink-0 relative group-hover:border-red-600 transition-colors bg-zinc-900 flex items-center justify-center text-zinc-700">
-                                            {niche.thumbnail ? (
-                                                <img 
-                                                    src={getDirectImageUrl(niche.thumbnail)} 
-                                                    alt={niche.name} 
-                                                    className="w-full h-full object-cover" 
-                                                    referrerPolicy="no-referrer"
-                                                />
-                                            ) : (
-                                                <Youtube size={24} />
-                                            )}
-                                        </div>
-                                        <div className="flex-1 min-w-0 flex flex-col">
-                                            <div className="flex items-center justify-between gap-2">
-                                                <h4 className="text-lg font-black text-white uppercase tracking-tight truncate">
-                                                    {niche.name || 'Canal de YouTube'}
-                                                </h4>
-                                                {niche.created_at && (
-                                                    <span className="text-[8px] font-black bg-white/10 text-white px-2 py-0.5 rounded-full uppercase tracking-tighter whitespace-nowrap">
-                                                        {(() => {
-                                                            const createdDate = new Date(niche.created_at);
-                                                            const expiryDate = new Date(createdDate);
-                                                            expiryDate.setDate(expiryDate.getDate() + 30);
-                                                            const now = new Date();
-                                                            const diffTime = expiryDate.getTime() - now.getTime();
-                                                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                                                            return diffDays > 0 ? `${diffDays}d` : '0d';
-                                                        })()}
+                    {!canAccessNiches ? (
+                        <div className="flex-1 flex items-center justify-center p-6">
+                            <PermissionPaywall 
+                                badge="ACCESO EXCLUSIVO VIP"
+                                title="Nichos de Alta Rentabilidad Bloqueados"
+                                description="Accede a la base de datos de canales y nichos ganadores analizados por inteligencia artificial. Requiere membresía VIP activa."
+                                linkText="ADQUIRIR ACCESO COMPLETO"
+                                linkUrl="https://hotmart.com"
+                            />
+                        </div>
+                    ) : (
+                        /* Scrollable List */
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-12 pt-12">
+                            <div className="max-w-7xl mx-auto w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {niches.map(niche => (
+                                    <motion.div 
+                                        layout
+                                        key={niche.id} 
+                                        initial={{ opacity: 0, scale: 0.95 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        className="group relative bg-[#0a0a0a] border border-white/5 p-6 rounded-2xl hover:border-red-600/30 transition-all flex flex-col gap-6"
+                                    >
+                                        {/* Info Panel */}
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/10 flex-shrink-0 relative group-hover:border-red-600 transition-colors bg-zinc-900 flex items-center justify-center text-zinc-700">
+                                                {niche.thumbnail ? (
+                                                    <img 
+                                                        src={getDirectImageUrl(niche.thumbnail)} 
+                                                        alt={niche.name} 
+                                                        className="w-full h-full object-cover" 
+                                                        referrerPolicy="no-referrer"
+                                                    />
+                                                ) : (
+                                                    <Youtube size={24} />
+                                                )}
+                                            </div>
+                                            <div className="flex-1 min-w-0 flex flex-col">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <h4 className="text-lg font-black text-white uppercase tracking-tight truncate">
+                                                        {niche.name || 'Canal de YouTube'}
+                                                    </h4>
+                                                    {niche.created_at && (
+                                                        <span className="text-[8px] font-black bg-white/10 text-white px-2 py-0.5 rounded-full uppercase tracking-tighter whitespace-nowrap">
+                                                            {(() => {
+                                                                const createdDate = new Date(niche.created_at);
+                                                                const expiryDate = new Date(createdDate);
+                                                                expiryDate.setDate(expiryDate.getDate() + 30);
+                                                                const now = new Date();
+                                                                const diffTime = expiryDate.getTime() - now.getTime();
+                                                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                                                return diffDays > 0 ? `${diffDays}d` : '0d';
+                                                            })()}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {niche.subscriber_count && (
+                                                    <span className="text-sm font-bold text-red-500 mt-0.5">
+                                                        {Number(niche.subscriber_count).toLocaleString()} Subs
                                                     </span>
                                                 )}
                                             </div>
-                                            {niche.subscriber_count && (
-                                                <span className="text-sm font-bold text-red-500 mt-0.5">
-                                                    {Number(niche.subscriber_count).toLocaleString()} Subs
-                                                </span>
-                                            )}
                                         </div>
-                                    </div>
 
-                                    <div className="flex-1 flex flex-col">
-                                        {niche.description && (() => {
-                                            try {
-                                                const popularVideo = JSON.parse(niche.description);
-                                                if (popularVideo && popularVideo.id && popularVideo.title) {
-                                                    return (
-                                                        <div className="mt-2 border-t border-white/5 pt-4">
-                                                            <h5 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3">Vídeo más popular</h5>
-                                                            <a href={`https://youtube.com/watch?v=${popularVideo.id}`} target="_blank" rel="noopener noreferrer" className="group/video block">
-                                                                <div className="aspect-video bg-zinc-900 rounded-lg overflow-hidden border border-white/5 relative mb-2 group-hover/video:border-red-600/50 transition-colors">
-                                                                    <img 
-                                                                        src={getDirectImageUrl(popularVideo.thumbnail)} 
-                                                                        alt={popularVideo.title} 
-                                                                        className="w-full h-full object-cover" 
-                                                                        referrerPolicy="no-referrer"
-                                                                    />
-                                                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/video:opacity-100 transition-opacity flex items-center justify-center">
-                                                                        <div className="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center text-white">
-                                                                            <Play size={16} fill="currentColor" />
+                                        <div className="flex-1 flex flex-col">
+                                            {niche.description && (() => {
+                                                try {
+                                                    const popularVideo = JSON.parse(niche.description);
+                                                    if (popularVideo && popularVideo.id && popularVideo.title) {
+                                                        return (
+                                                            <div className="mt-2 border-t border-white/5 pt-4">
+                                                                <h5 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3">Vídeo más popular</h5>
+                                                                <a href={`https://youtube.com/watch?v=${popularVideo.id}`} target="_blank" rel="noopener noreferrer" className="group/video block">
+                                                                    <div className="aspect-video bg-zinc-900 rounded-lg overflow-hidden border border-white/5 relative mb-2 group-hover/video:border-red-600/50 transition-colors">
+                                                                        <img 
+                                                                            src={getDirectImageUrl(popularVideo.thumbnail)} 
+                                                                            alt={popularVideo.title} 
+                                                                            className="w-full h-full object-cover" 
+                                                                            referrerPolicy="no-referrer"
+                                                                        />
+                                                                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/video:opacity-100 transition-opacity flex items-center justify-center">
+                                                                            <div className="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center text-white">
+                                                                                <Play size={16} fill="currentColor" />
+                                                                            </div>
                                                                         </div>
                                                                     </div>
-                                                                </div>
-                                                                <p className="text-sm font-bold text-zinc-300 line-clamp-2 leading-tight group-hover/video:text-white transition-colors">{popularVideo.title}</p>
-                                                                {popularVideo.viewCount && (
-                                                                    <p className="text-xs font-black bg-red-600/20 text-red-500 inline-block px-2 py-1 rounded mt-2 border border-red-600/30">
-                                                                        {Number(popularVideo.viewCount).toLocaleString()} Vistas
-                                                                    </p>
-                                                                )}
-                                                            </a>
-                                                        </div>
+                                                                    <p className="text-sm font-bold text-zinc-300 line-clamp-2 leading-tight group-hover/video:text-white transition-colors">{popularVideo.title}</p>
+                                                                    {popularVideo.viewCount && (
+                                                                        <p className="text-xs font-black bg-red-600/20 text-red-500 inline-block px-2 py-1 rounded mt-2 border border-red-600/30">
+                                                                            {Number(popularVideo.viewCount).toLocaleString()} Vistas
+                                                                        </p>
+                                                                    )}
+                                                                </a>
+                                                            </div>
+                                                        );
+                                                    }
+                                                } catch (e) {
+                                                    return (
+                                                        <p className="text-sm text-zinc-400 leading-relaxed border-t border-white/5 pt-4 italic">
+                                                            "{niche.description}"
+                                                        </p>
                                                     );
                                                 }
-                                            } catch (e) {
-                                                return (
-                                                    <p className="text-sm text-zinc-400 leading-relaxed border-t border-white/5 pt-4 italic">
-                                                        "{niche.description}"
-                                                    </p>
-                                                );
-                                            }
-                                        })()}
-                                    </div>
+                                            })()}
+                                        </div>
 
-                                    {/* Actions */}
-                                    <div className="flex items-center gap-3 border-t border-white/5 pt-4 mt-auto">
-                                        <a 
-                                            href={niche.url} 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="flex-1 px-4 py-3 bg-red-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-red-500 transition-all shadow-lg shadow-red-600/20 flex items-center justify-center gap-2 group/btn"
-                                        >
-                                            IR AL CANAL <ExternalLink size={12} className="group-hover/btn:translate-x-1 group-hover/btn:-translate-y-1 transition-transform" />
-                                        </a>
+                                        {/* Actions */}
+                                        <div className="flex items-center gap-3 border-t border-white/5 pt-4 mt-auto">
+                                            <a 
+                                                href={niche.url} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="flex-1 px-4 py-3 bg-red-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-red-500 transition-all shadow-lg shadow-red-600/20 flex items-center justify-center gap-2 group/btn"
+                                            >
+                                                IR AL CANAL <ExternalLink size={12} className="group-hover/btn:translate-x-1 group-hover/btn:-translate-y-1 transition-transform" />
+                                            </a>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                                
+                                {niches.length === 0 && (
+                                    <div className="py-20 text-center space-y-4 border border-dashed border-white/10 rounded-3xl">
+                                        <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mx-auto text-zinc-700">
+                                            <Youtube size={32} />
+                                        </div>
+                                        <p className="text-zinc-600 text-xs font-black uppercase tracking-[0.3em] italic">
+                                            No hay nichos compartidos aún
+                                        </p>
                                     </div>
-                                </motion.div>
-                            ))}
-                            
-                            {niches.length === 0 && (
-                                <div className="py-20 text-center space-y-4 border border-dashed border-white/10 rounded-3xl">
-                                    <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mx-auto text-zinc-700">
-                                        <Youtube size={32} />
-                                    </div>
-                                    <p className="text-zinc-600 text-xs font-black uppercase tracking-[0.3em] italic">
-                                        No hay nichos compartidos aún
-                                    </p>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </motion.div>
              )}
 
              {/* === VIEW: TOOLS === */}
              {viewState === 'TOOLS' && (
-                <motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} className="h-full flex flex-col">
+                <motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} className="h-full flex flex-col relative">
                     {/* Tools Catalog Grid */}
-                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-12 pt-12">
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-12 pt-12 pb-32">
                         <div className="max-w-7xl mx-auto w-full grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                            {tools.map(tool => (
-                                <motion.div 
-                                    layout
-                                    key={tool.id}
-                                    initial={{ opacity: 0, scale: 0.95 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    className="group relative"
-                                >
-                                    <a 
-                                        href={tool.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="block relative h-24 w-full rounded-2xl p-[1px] transition-all hover:scale-[1.02] shadow-xl overflow-hidden border border-white"
+                            {tools.map(tool => {
+                                const isToolLocked = !!tool.es_premium && !canAccessTools;
+                                return (
+                                    <motion.div 
+                                        layout
+                                        key={tool.id}
+                                        initial={{ opacity: 0, scale: 0.95 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        className="group relative"
                                     >
-                                        <div className="absolute inset-0 bg-gradient-to-br from-red-600 via-black to-red-900 animate-gradient-slow" />
-                                        <div className="relative h-full w-full flex items-center justify-center bg-black/40 backdrop-blur-sm group-hover:bg-transparent transition-colors">
-                                            <span className="text-sm font-black uppercase tracking-widest text-white text-center px-4 drop-shadow-md">
-                                                {tool.name}
-                                            </span>
-                                        </div>
-                                    </a>
-                                    
-                                </motion.div>
-                            ))}
+                                        {isToolLocked ? (
+                                            <div 
+                                                onClick={() => setToolsLockMessage(`La herramienta "${tool.name}" es exclusiva premium. Solicita acceso o adquiérela en Hotmart.`)}
+                                                className="block relative h-24 w-full rounded-2xl p-[1px] cursor-pointer shadow-xl overflow-hidden border border-zinc-800 hover:border-red-650/30 transition-colors bg-zinc-950"
+                                            >
+                                                <div className="relative h-full w-full flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm gap-1">
+                                                    <Lock size={16} className="text-red-500 animate-pulse" />
+                                                    <span className="text-xs font-black uppercase tracking-widest text-zinc-500 text-center px-4">
+                                                        {tool.name}
+                                                    </span>
+                                                    <span className="text-[7px] font-black bg-red-600/10 text-red-500 px-2 py-0.5 rounded border border-red-650/20 uppercase tracking-widest">
+                                                        PREMIUM BLOQUEADA
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <a 
+                                                href={tool.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="block relative h-24 w-full rounded-2xl p-[1px] transition-all hover:scale-[1.02] shadow-xl overflow-hidden border border-white"
+                                            >
+                                                <div className="absolute inset-0 bg-gradient-to-br from-red-600 via-black to-red-900 animate-gradient-slow" />
+                                                <div className="relative h-full w-full flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm group-hover:bg-transparent transition-colors gap-1">
+                                                    <span className="text-sm font-black uppercase tracking-widest text-white text-center px-4 drop-shadow-md">
+                                                        {tool.name}
+                                                    </span>
+                                                    {tool.es_premium ? (
+                                                        <span className="text-[7px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded shadow">
+                                                            ★ PREMIUM ACCESIBLE
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[7px] font-black bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded border border-white/5 uppercase tracking-widest">
+                                                            ACCESO LIBRE
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </a>
+                                        )}
+                                    </motion.div>
+                                );
+                            })}
                         </div>
                     </div>
+
+                    {/* Dynamic Lock Feedback Toast */}
+                    {toolsLockMessage && (
+                       <div className="fixed bottom-8 right-8 z-[100] bg-zinc-950 border border-red-600/30 p-5 rounded-2xl shadow-[0_0_30px_rgba(234,42,51,0.25)] flex items-center gap-4 max-w-sm animate-bounce">
+                           <div className="w-10 h-10 bg-red-600/10 rounded-xl flex items-center justify-center text-red-500 flex-shrink-0">
+                               <Lock size={20} />
+                           </div>
+                           <div className="flex-1 min-w-0">
+                               <h4 className="text-[10px] font-black text-white uppercase tracking-wider">Recurso Premium Requerido</h4>
+                               <p className="text-[9px] text-zinc-400 font-medium leading-tight mt-0.5">{toolsLockMessage}</p>
+                           </div>
+                       </div>
+                    )}
                 </motion.div>
              )}
 
@@ -970,40 +1255,65 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                     {/* Extensions Catalog Grid (Rows of 3) */}
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-12 pt-12">
                         <div className="max-w-7xl mx-auto w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-                            {extensions.map(ext => (
-                                <motion.div 
-                                    layout
-                                    key={ext.id}
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className="group relative bg-[#0a0a0a] border border-white/5 p-8 rounded-3xl hover:border-red-600/30 transition-all flex flex-col gap-6"
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-14 h-14 rounded-2xl bg-red-600/10 border border-red-600/20 flex items-center justify-center text-red-500 group-hover:scale-110 transition-transform">
-                                            <Folder size={28} />
+                            {extensions.map(ext => {
+                                const isExtLocked = !!ext.es_premium && !canAccessExtensions;
+                                return (
+                                    <motion.div 
+                                        layout
+                                        key={ext.id}
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className={`group relative bg-[#0a0a0a] border p-8 rounded-3xl transition-all flex flex-col gap-6 ${
+                                            isExtLocked ? 'border-zinc-800 opacity-75' : 'border-white/5 hover:border-red-600/30'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-transform ${
+                                                isExtLocked ? 'bg-zinc-90 w/20 border border-zinc-800 text-zinc-650' : 'bg-red-600/10 border border-red-600/20 text-red-500 group-hover:scale-110'
+                                            }`}>
+                                                {isExtLocked ? <Lock size={20} className="text-red-500" /> : <Folder size={28} />}
+                                            </div>
+                                            <div className="flex-1 min-w-0 pr-2">
+                                                <h4 className="text-xl font-black text-white uppercase tracking-tight truncate">
+                                                    {ext.name}
+                                                </h4>
+                                                {ext.es_premium && (
+                                                    <span className={`text-[7px] font-black px-2 py-0.5 rounded uppercase mt-1 inline-block ${
+                                                        isExtLocked ? 'bg-red-600/10 text-red-500 border border-red-600/20' : 'bg-emerald-600 text-white'
+                                                    }`}>
+                                                        {isExtLocked ? 'PREMIUM BLOQUEADA' : 'PREMIUM ACCESIBLE'}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
-                                        <h4 className="text-xl font-black text-white uppercase tracking-tight truncate flex-1">
-                                            {ext.name}
-                                        </h4>
-                                    </div>
-                                    
-                                    <p className="text-sm text-zinc-500 leading-relaxed line-clamp-4 flex-1">
-                                        {ext.description || 'Sin descripción disponible.'}
-                                    </p>
+                                        
+                                        <p className="text-sm text-zinc-500 leading-relaxed line-clamp-4 flex-1">
+                                            {ext.description || 'Sin descripción disponible.'}
+                                        </p>
 
-                                    <div className="pt-4 border-t border-white/5">
-                                        <a 
-                                            href={ext.url} 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="w-full py-4 rounded-2xl bg-gradient-to-br from-red-600 via-black to-red-900 border border-white/10 text-white text-xs font-black uppercase tracking-[0.2em] hover:scale-[1.02] transition-all flex items-center justify-center gap-2 shadow-xl"
-                                        >
-                                            DESCARGAR EXTENSIÓN <Download size={14} />
-                                        </a>
-                                    </div>
-                                    
-                                </motion.div>
-                            ))}
+                                        <div className="pt-4 border-t border-white/5">
+                                            {isExtLocked ? (
+                                                <button 
+                                                    onClick={() => setToolsLockMessage(`La extensión "${ext.name}" es exclusiva PREMIUM. Se requiere suscripción activa para descargar.`)}
+                                                    className="w-full py-4 rounded-xl bg-zinc-900 border border-white/5 text-zinc-500 text-xs font-black uppercase tracking-[0.2em] cursor-pointer flex items-center justify-center gap-2"
+                                                >
+                                                    BLOQUEADO PREMIUM <Lock size={14} className="text-red-500 animate-pulse" />
+                                                </button>
+                                            ) : (
+                                                <a 
+                                                    href={ext.url} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="w-full py-4 rounded-2xl bg-gradient-to-br from-red-600 via-black to-red-900 border border-white/10 text-white text-xs font-black uppercase tracking-[0.2em] hover:scale-[1.02] transition-all flex items-center justify-center gap-2 shadow-xl"
+                                                >
+                                                    DESCARGAR EXTENSIÓN <Download size={14} />
+                                                </a>
+                                            )}
+                                        </div>
+                                        
+                                    </motion.div>
+                                );
+                            })}
                         </div>
                     </div>
                 </motion.div>

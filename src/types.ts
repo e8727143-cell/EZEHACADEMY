@@ -39,6 +39,10 @@ export interface User {
   progress: string[];
   last_seen?: string;
   created_at?: string;
+  tiene_acceso_cursos?: boolean;
+  tiene_acceso_nichos?: boolean;
+  tiene_acceso_herramientas?: boolean;
+  tiene_acceso_extensiones?: boolean;
 }
 
 export interface Niche {
@@ -58,6 +62,7 @@ export interface Tool {
   name: string;
   url: string;
   created_at?: string;
+  es_premium?: boolean;
 }
 
 export interface Extension {
@@ -66,4 +71,5 @@ export interface Extension {
   url: string;
   description: string;
   created_at?: string;
+  es_premium?: boolean;
 }
